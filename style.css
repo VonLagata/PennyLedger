@@ -131,8 +131,8 @@ img{ max-width:100%; display:block; }
 html[data-theme="dark"] .logo-img.logo-light{ display:none; }
 html[data-theme="dark"] .logo-img.logo-dark{ display:block; }
 
-.sidebar .logo-img{ height:100px; }
-.auth-header .logo-img, .site-header .logo-img{ height:76px; }
+.sidebar .logo-img{ height:72px; }
+.auth-header .logo-img, .site-header .logo-img{ height:44px; }
 .site-footer .logo-img{ height:60px; }
 /* Sidebar always sits on the solid brand green, so it always wants the white wordmark */
 .sidebar .logo-img.logo-light{ display:none !important; }
@@ -140,6 +140,8 @@ html[data-theme="dark"] .logo-img.logo-dark{ display:block; }
 /* Footer is always dark, so it always wants the white wordmark regardless of theme */
 .site-footer .logo-img.logo-light{ display:none !important; }
 .site-footer .logo-img.logo-dark{ display:block !important; }
+/* logo size adjustment */
+.site-header, .auth-header, .topbar{ height: 76px; padding-top: 0; padding-bottom: 0; }
 
 /* =========================================================
    Buttons
@@ -323,7 +325,7 @@ html[data-theme="dark"] .site-footer{ background: linear-gradient(175deg, #0E191
   border-radius: var(--radius-lg);
   padding: 40px 40px 34px;
   max-width: 430px; margin-left:auto; width:100%;
-  box-shadow: var(--shadow-lg);
+  box-shadow: 0 14px 32px rgba(0,0,0,.45);
   position:relative; z-index:2;
 }
 .auth-card h2{ text-align:center; font-size:1.7rem; margin-bottom:6px; color:#fff; }
@@ -390,8 +392,14 @@ html[data-theme="dark"] .site-footer{ background: linear-gradient(175deg, #0E191
 }
 .side-nav a svg{ width:18px; height:18px; flex-shrink:0; opacity:.75; }
 .side-nav a:hover{ transform: translateX(2px); }
-.side-nav a.active{ color: var(--blue); background:#F3F8FE; }
+.side-nav a.active{ color: var(--blue); background: var(--blue-50); }
 .side-nav a.active svg{ opacity:1; }
+/* dark-mode-only override */
+html[data-theme="dark"] .side-nav a:not(.active){
+  background: rgba(255,255,255,.06);
+  color: #DCE7D6;
+}
+html[data-theme="dark"] .side-nav a:not(.active) svg{ opacity:.9; }
 
 .sidebar-spacer{ flex:1; }
 
@@ -495,11 +503,11 @@ html[data-theme="dark"] .site-footer{ background: linear-gradient(175deg, #0E191
 
 /* Donut chart */
 .donut-wrap{ display:flex; align-items:center; gap:22px; }
-.donut{ width:130px; height:130px; border-radius:50%; flex-shrink:0; position:relative; }
-.donut::after{ content:""; position:absolute; inset:20px; border-radius:50%; background:var(--card); }
-.donut-center{ position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:2; }
-.donut-center strong{ font-family:var(--font-display); font-size:1.2rem; }
-.donut-center span{ font-size:.68rem; color:var(--muted); }
+.donut{ width:150px; height:150px; border-radius:50%; flex-shrink:0; position:relative; }
+.donut::after{ content:""; position:absolute; inset:16px; border-radius:50%; background:var(--card); }
+.donut-center{ position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:2; padding:0 8px; }
+.donut-center strong{ font-family:var(--font-display); font-size:clamp(0.8rem, 1.1vw, 1rem); letter-spacing:-0.02em; white-space:nowrap; line-height:1.1; }
+.donut-center span{ font-size:.65rem; color:var(--muted); }
 .donut-legend{ display:flex; flex-direction:column; gap:9px; font-size:.83rem; flex:1; }
 .donut-legend li{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
 .donut-legend .dl-left{ display:flex; align-items:center; gap:8px; color:var(--ink-soft); }
