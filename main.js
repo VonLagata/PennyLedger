@@ -93,8 +93,9 @@ function updateThemeLinks(theme){
 function setActiveNav(){
   const file = location.pathname.split('/').pop() || 'index.html';
   document.querySelectorAll('.side-nav a').forEach(link => {
-    const href = link.getAttribute('href');
+    const href = (link.getAttribute('href') || '').split('?')[0];
     if (href === file) link.classList.add('active');
+    else link.classList.remove('active');
   });
 }
 
@@ -154,7 +155,9 @@ function setupSignupValidation(){
     }
     hint.textContent = '';
     showToast('Account created — redirecting to your dashboard…');
-    setTimeout(() => { window.location.href = 'dashboard.html'; }, 1100);
+    const theme = document.documentElement.getAttribute('data-theme');
+    const target = 'dashboard.html' + (theme === 'dark' ? '?theme=dark' : '');
+    setTimeout(() => { window.location.href = target; }, 1100);
   });
 }
 
@@ -165,7 +168,9 @@ document.addEventListener('DOMContentLoaded', () => {
   login.addEventListener('submit', e => {
     e.preventDefault();
     showToast('Welcome back — signing you in…');
-    setTimeout(() => { window.location.href = 'dashboard.html'; }, 900);
+    const theme = document.documentElement.getAttribute('data-theme');
+    const target = 'dashboard.html' + (theme === 'dark' ? '?theme=dark' : '');
+    setTimeout(() => { window.location.href = target; }, 900);
   });
 });
 
