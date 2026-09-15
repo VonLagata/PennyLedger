@@ -4,6 +4,8 @@
 
 document.addEventListener('DOMContentLoaded', () => {
   initTheme();
+  initCurrency();
+  initDateFormat();
   setActiveNav();
   setupSidebarToggle();
   setupPasswordToggles();
@@ -14,14 +16,12 @@ document.addEventListener('DOMContentLoaded', () => {
   setupScrollReveal();
 });
 
-/* Logout — clears nothing (there's no real session), just sends the
-   person back to the login screen with a quick confirmation toast. */
+/* Logout — redirects to login screen preserving theme and currency */
 function setupLogout(){
   document.querySelectorAll('.logout-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       showToast('Logging you out…');
-      const theme = document.documentElement.getAttribute('data-theme');
-      const target = 'login.html' + (theme === 'dark' ? '?theme=dark' : '');
+      const target = 'login.html' + getQueryString();
       setTimeout(() => { window.location.href = target; }, 650);
     });
   });
@@ -44,20 +44,103 @@ function setupScrollReveal(){
 }
 
 /* =========================================================
-   Theme (light/dark)
-   PennyLedger is a static, multi-page prototype with no
-   backend, and this file renders as a sandboxed artifact —
-   so localStorage/sessionStorage are off the table. Instead
-   the choice lives in a `?theme=dark` URL param: it's applied
-   before first paint by a tiny inline script in each <head>,
-   and every internal link is rewritten to carry it forward as
-   you click through the site.
+   Theme & Currency State Management
+   Settings are stored in localStorage when available and carried
+   across internal page links via URL parameters (?theme=dark&currency=PHP)
+   to ensure persistence in prototypes, sandboxed environments,
+   and normal browsing alike.
    ========================================================= */
+
+const CURRENCIES = {
+  USD: { code: 'USD', symbol: '$', name: 'US Dollar (USD)' },
+  PHP: { code: 'PHP', symbol: '₱', name: 'Philippine Peso (PHP)' },
+  EUR: { code: 'EUR', symbol: '€', name: 'Euro (EUR)' }
+};
+
+function normalizeCurrency(input){
+  if (!input) return 'USD';
+  const str = input.trim().toUpperCase();
+  if (str === 'PHP' || str === '₱' || str.includes('PESO')) return 'PHP';
+  if (str === 'EUR' || str === '€' || str.includes('EURO')) return 'EUR';
+  if (str === 'USD' || str === '$' || str.includes('DOLLAR')) return 'USD';
+  return 'USD';
+}
+
+function getCurrency(){
+  const params = new URLSearchParams(location.search);
+  const paramVal = params.get('currency');
+  if (paramVal) return normalizeCurrency(paramVal);
+  try {
+    const saved = localStorage.getItem('pennyledger_currency');
+    if (saved) return normalizeCurrency(saved);
+  } catch(e){}
+  return 'USD';
+}
+
+function getCurrencySymbol(code){
+  const c = normalizeCurrency(code || getCurrency());
+  return CURRENCIES[c] ? CURRENCIES[c].symbol : '$';
+}
+
+function formatCurrency(amount, includeSign = false){
+  const sym = getCurrencySymbol();
+  const num = Number(amount) || 0;
+  const formatted = Math.abs(num).toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
+  if (includeSign) {
+    const sign = num > 0 ? '+' : (num < 0 ? '-' : '');
+    return `${sign}${sym}${formatted}`;
+  }
+  return `${num < 0 ? '-' : ''}${sym}${formatted}`;
+}
+
+function getQueryString(){
+  const theme = document.documentElement.getAttribute('data-theme');
+  const currency = getCurrency();
+  const dateformat = getDateFormat();
+  const params = new URLSearchParams();
+  if (theme === 'dark') params.set('theme', 'dark');
+  if (currency && currency !== 'USD') params.set('currency', currency);
+  if (dateformat && dateformat !== 'MMM D, YYYY') params.set('dateformat', dateformat);
+  const q = params.toString();
+  return q ? '?' + q : '';
+}
+
+function updateInternalLinks(){
+  const theme = document.documentElement.getAttribute('data-theme');
+  const currency = getCurrency();
+  const dateformat = getDateFormat();
+  document.querySelectorAll('a[href]').forEach(a => {
+    const href = a.getAttribute('href');
+    if (!href) return;
+    const path = href.split('?')[0];
+    if (!path.endsWith('.html')) return;
+    const url = new URL(href, location.href);
+    if (theme === 'dark') url.searchParams.set('theme', 'dark');
+    else url.searchParams.delete('theme');
+    if (currency && currency !== 'USD') url.searchParams.set('currency', currency);
+    else url.searchParams.delete('currency');
+    if (dateformat && dateformat !== 'MMM D, YYYY') url.searchParams.set('dateformat', dateformat);
+    else url.searchParams.delete('dateformat');
+    a.setAttribute('href', path + (url.search ? url.search : ''));
+  });
+}
+
+function updateThemeLinks(theme){
+  updateInternalLinks();
+}
+
 function initTheme(){
   const params = new URLSearchParams(location.search);
-  const theme = params.get('theme') === 'dark' ? 'dark' : 'light';
+  let theme = params.get('theme');
+  if (!theme) {
+    try { theme = localStorage.getItem('pennyledger_theme'); } catch(e){}
+  }
+  theme = theme === 'dark' ? 'dark' : 'light';
   document.documentElement.setAttribute('data-theme', theme);
-  updateThemeLinks(theme);
+  updateInternalLinks();
 
   document.querySelectorAll('.theme-checkbox').forEach(box => {
     box.checked = theme === 'dark';
@@ -67,6 +150,7 @@ function initTheme(){
 
 function setTheme(theme){
   document.documentElement.setAttribute('data-theme', theme);
+  try { localStorage.setItem('pennyledger_theme', theme); } catch(e){}
   document.querySelectorAll('.theme-checkbox').forEach(box => { box.checked = theme === 'dark'; });
 
   const url = new URL(location.href);
@@ -74,20 +158,268 @@ function setTheme(theme){
   else url.searchParams.delete('theme');
   history.replaceState({}, '', url);
 
-  updateThemeLinks(theme);
+  updateInternalLinks();
 }
 
-function updateThemeLinks(theme){
-  document.querySelectorAll('a[href]').forEach(a => {
-    const href = a.getAttribute('href');
-    const path = href ? href.split('?')[0] : '';
-    if (!path.endsWith('.html')) return;
-    const url = new URL(href, location.href);
-    if (theme === 'dark') url.searchParams.set('theme', 'dark');
-    else url.searchParams.delete('theme');
-    a.setAttribute('href', path + url.search);
+function applyCurrencyToDom(symbol){
+  if (!document.body) return;
+  const walker = document.createTreeWalker(
+    document.body,
+    NodeFilter.SHOW_TEXT,
+    {
+      acceptNode(node){
+        const parent = node.parentElement;
+        if (!parent) return NodeFilter.FILTER_REJECT;
+        const tag = parent.tagName.toUpperCase();
+        if (tag === 'SCRIPT' || tag === 'STYLE' || tag === 'NOSCRIPT') return NodeFilter.FILTER_REJECT;
+        if (parent.closest('#s-currency') || parent.closest('.no-currency-replace')) return NodeFilter.FILTER_REJECT;
+        if (/[\$₱€£¥]/.test(node.nodeValue)) return NodeFilter.FILTER_ACCEPT;
+        return NodeFilter.FILTER_SKIP;
+      }
+    }
+  );
+
+  const nodes = [];
+  while (walker.nextNode()) {
+    nodes.push(walker.currentNode);
+  }
+
+  nodes.forEach(node => {
+    node.nodeValue = node.nodeValue.replace(/[\$₱€£¥]/g, symbol);
   });
 }
+
+function setCurrency(code){
+  const curr = normalizeCurrency(code);
+  const symbol = getCurrencySymbol(curr);
+
+  try {
+    localStorage.setItem('pennyledger_currency', curr);
+  } catch(e){}
+
+  const url = new URL(location.href);
+  if (curr !== 'USD') {
+    url.searchParams.set('currency', curr);
+  } else {
+    url.searchParams.delete('currency');
+  }
+  history.replaceState({}, '', url);
+
+  updateInternalLinks();
+
+  const select = document.getElementById('s-currency');
+  if (select && select.value !== curr) {
+    select.value = curr;
+  }
+
+  applyCurrencyToDom(symbol);
+
+  document.dispatchEvent(new CustomEvent('currencychange', { detail: { currency: curr, symbol } }));
+}
+
+function initCurrency(){
+  const curr = getCurrency();
+  const symbol = getCurrencySymbol(curr);
+
+  const select = document.getElementById('s-currency');
+  if (select) {
+    select.value = curr;
+    // Currency no longer applies on 'change' — it only takes effect once
+    // the user clicks "Save Changes" on the profile form, which calls
+    // setCurrency(select.value) itself (see settings.html).
+  }
+
+  applyCurrencyToDom(symbol);
+  updateInternalLinks();
+}
+
+// =========================================================
+// Date Format System
+// Supported formats:
+// - 'MMM D, YYYY' (e.g. Mar 14, 2026)
+// - 'DD/MM/YYYY'  (e.g. 14/03/2026)
+// - 'MM/DD/YYYY'  (e.g. 03/14/2026)
+// =========================================================
+
+const MONTH_NAMES_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const MONTH_MAP = {
+  jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6,
+  jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12
+};
+
+function normalizeDateFormat(input){
+  if (!input) return 'MMM D, YYYY';
+  const str = input.trim();
+  if (str === 'DD/MM/YYYY' || str === '14/03/2026' || str.toLowerCase() === 'dmy') return 'DD/MM/YYYY';
+  if (str === 'MM/DD/YYYY' || str === '03/14/2026' || str.toLowerCase() === 'mdy') return 'MM/DD/YYYY';
+  return 'MMM D, YYYY';
+}
+
+function getDateFormat(){
+  const params = new URLSearchParams(location.search);
+  const paramVal = params.get('dateformat');
+  if (paramVal) return normalizeDateFormat(paramVal);
+  try {
+    const saved = localStorage.getItem('pennyledger_dateformat');
+    if (saved) return normalizeDateFormat(saved);
+  } catch(e){}
+  return 'MMM D, YYYY';
+}
+
+function parseDate(input){
+  if (!input) return null;
+  if (input instanceof Date && !isNaN(input.getTime())) {
+    return { year: input.getFullYear(), month: input.getMonth() + 1, day: input.getDate() };
+  }
+  const str = String(input).trim();
+
+  // YYYY-MM-DD
+  const isoMatch = str.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (isoMatch){
+    return { year: parseInt(isoMatch[1], 10), month: parseInt(isoMatch[2], 10), day: parseInt(isoMatch[3], 10) };
+  }
+
+  // Month Day, Year (e.g. "Mar 14, 2026" or "Aug 31, 2026" or "Mar 12")
+  const mdyTextMatch = str.match(/^([A-Za-z]+)\s+(\d{1,2})(?:,?\s*(\d{4}))?/);
+  if (mdyTextMatch){
+    const mStr = mdyTextMatch[1].slice(0, 3).toLowerCase();
+    const month = MONTH_MAP[mStr];
+    if (month){
+      const day = parseInt(mdyTextMatch[2], 10);
+      const year = mdyTextMatch[3] ? parseInt(mdyTextMatch[3], 10) : 2026;
+      return { year, month, day };
+    }
+  }
+
+  // DD/MM/YYYY or MM/DD/YYYY
+  const slashMatch = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (slashMatch){
+    const n1 = parseInt(slashMatch[1], 10);
+    const n2 = parseInt(slashMatch[2], 10);
+    const year = parseInt(slashMatch[3], 10);
+    if (n1 > 12) {
+      return { year, month: n2, day: n1 };
+    } else if (n2 > 12) {
+      return { year, month: n1, day: n2 };
+    } else {
+      const currFmt = getDateFormat();
+      if (currFmt === 'DD/MM/YYYY') {
+        return { year, month: n2, day: n1 };
+      } else {
+        return { year, month: n1, day: n2 };
+      }
+    }
+  }
+
+  return null;
+}
+
+function formatDateParts(parts, formatType){
+  if (!parts) return '';
+  const fmt = normalizeDateFormat(formatType || getDateFormat());
+  const y = parts.year;
+  const m = parts.month;
+  const d = parts.day;
+  const mm = String(m).padStart(2, '0');
+  const dd = String(d).padStart(2, '0');
+  const monthName = MONTH_NAMES_SHORT[m - 1] || 'Jan';
+
+  if (fmt === 'DD/MM/YYYY') {
+    return `${dd}/${mm}/${y}`;
+  } else if (fmt === 'MM/DD/YYYY') {
+    return `${mm}/${dd}/${y}`;
+  }
+  return `${monthName} ${d}, ${y}`;
+}
+
+function formatDate(date, formatType){
+  const parts = parseDate(date);
+  return parts ? formatDateParts(parts, formatType) : '';
+}
+
+function applyDateFormatToDom(formatType){
+  const fmt = normalizeDateFormat(formatType || getDateFormat());
+  const elements = document.querySelectorAll('.td-date, .td-gen, .tx-date, [data-raw-date]');
+
+  elements.forEach(el => {
+    if (!el.dataset.rawDate) {
+      const parsed = parseDate(el.textContent.trim());
+      if (parsed) {
+        el.dataset.rawDate = `${parsed.year}-${String(parsed.month).padStart(2, '0')}-${String(parsed.day).padStart(2, '0')}`;
+      }
+    }
+
+    if (el.dataset.rawDate) {
+      const parts = parseDate(el.dataset.rawDate);
+      if (parts) {
+        el.textContent = formatDateParts(parts, fmt);
+      }
+    }
+  });
+}
+
+function setDateFormat(formatType){
+  const fmt = normalizeDateFormat(formatType);
+
+  try {
+    localStorage.setItem('pennyledger_dateformat', fmt);
+  } catch(e){}
+
+  const url = new URL(location.href);
+  if (fmt !== 'MMM D, YYYY') {
+    url.searchParams.set('dateformat', fmt);
+  } else {
+    url.searchParams.delete('dateformat');
+  }
+  history.replaceState({}, '', url);
+
+  updateInternalLinks();
+
+  const select = document.getElementById('s-dateformat');
+  if (select && select.value !== fmt) {
+    select.value = fmt;
+  }
+
+  applyDateFormatToDom(fmt);
+
+  document.dispatchEvent(new CustomEvent('dateformatchange', { detail: { format: fmt } }));
+}
+
+function initDateFormat(){
+  const fmt = getDateFormat();
+
+  const select = document.getElementById('s-dateformat');
+  if (select) {
+    select.value = fmt;
+    if (!select.dataset.dateFormatBound) {
+      select.dataset.dateFormatBound = 'true';
+      select.addEventListener('change', () => {
+        setDateFormat(select.value);
+        showToast(`Date format changed to ${select.options[select.selectedIndex]?.text || select.value}`);
+      });
+    }
+  }
+
+  applyDateFormatToDom(fmt);
+  updateInternalLinks();
+}
+
+window.getCurrency = getCurrency;
+window.getCurrencySymbol = getCurrencySymbol;
+window.formatCurrency = formatCurrency;
+window.setCurrency = setCurrency;
+window.applyCurrencyToDom = applyCurrencyToDom;
+
+window.getDateFormat = getDateFormat;
+window.setDateFormat = setDateFormat;
+window.formatDate = formatDate;
+window.applyDateFormatToDom = applyDateFormatToDom;
+
+window.addEventListener('popstate', () => {
+  initTheme();
+  initCurrency();
+  initDateFormat();
+});
 
 /* Highlight the current page in the sidebar nav */
 function setActiveNav(){
@@ -155,8 +487,7 @@ function setupSignupValidation(){
     }
     hint.textContent = '';
     showToast('Account created — redirecting to your dashboard…');
-    const theme = document.documentElement.getAttribute('data-theme');
-    const target = 'dashboard.html' + (theme === 'dark' ? '?theme=dark' : '');
+    const target = 'dashboard.html' + getQueryString();
     setTimeout(() => { window.location.href = target; }, 1100);
   });
 }
@@ -168,8 +499,7 @@ document.addEventListener('DOMContentLoaded', () => {
   login.addEventListener('submit', e => {
     e.preventDefault();
     showToast('Welcome back — signing you in…');
-    const theme = document.documentElement.getAttribute('data-theme');
-    const target = 'dashboard.html' + (theme === 'dark' ? '?theme=dark' : '');
+    const target = 'dashboard.html' + getQueryString();
     setTimeout(() => { window.location.href = target; }, 900);
   });
 });
@@ -219,7 +549,9 @@ function setupModals(){
       const isIncome = category === 'Income';
       const amount = Math.abs(amountRaw);
       const today = new Date();
-      const dateStr = today.toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' });
+      const isoStr = today.toISOString().split('T')[0];
+      const dateStr = formatDate(today);
+      const sym = getCurrencySymbol();
 
       const tbody = document.querySelector('#tx-table-body');
       if (tbody){
@@ -227,8 +559,8 @@ function setupModals(){
         row.innerHTML = `
           <td class="td-desc">${escapeHtml(name)}</td>
           <td class="td-category"><span class="pill ${pillClass(category)}">${category}</span></td>
-          <td class="td-date">${dateStr}</td>
-          <td class="td-amount ${isIncome ? 'amt-pos' : ''}">${isIncome ? '+' : '-'}$${amount.toFixed(2)}</td>`;
+          <td class="td-date" data-raw-date="${isoStr}">${dateStr}</td>
+          <td class="td-amount ${isIncome ? 'amt-pos' : ''}">${isIncome ? '+' : '-'}${sym}${amount.toFixed(2)}</td>`;
         row.style.animation = 'rise .4s ease both';
         tbody.prepend(row);
       }
@@ -249,6 +581,7 @@ function setupModals(){
       const saved = parseFloat(goalForm.querySelector('#goal-saved').value || '0');
       const by = goalForm.querySelector('#goal-date').value.trim() || 'No date set';
       const pct = target > 0 ? Math.min(100, Math.round((saved / target) * 100)) : 0;
+      const sym = getCurrencySymbol();
 
       const grid = document.querySelector('#goals-grid');
       if (grid){
@@ -264,7 +597,7 @@ function setupModals(){
             </div>
           </div>
           <div class="prog-track"><div class="prog-fill fill-green" style="width:${pct}%"></div></div>
-          <div class="gc-foot"><span>$${saved.toLocaleString()} saved of $${target.toLocaleString()}</span><b>${pct}%</b></div>`;
+          <div class="gc-foot"><span>${sym}${saved.toLocaleString()} saved of ${sym}${target.toLocaleString()}</span><b>${pct}%</b></div>`;
         grid.prepend(card);
       }
 

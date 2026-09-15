@@ -132,13 +132,14 @@
     e.preventDefault();
     const cat = document.getElementById('b-category').value.trim() || 'New category';
     const limit = parseFloat(document.getElementById('b-limit').value || '0');
+    const sym = window.getCurrencySymbol ? getCurrencySymbol() : '$';
     const grid = document.querySelector('.budget-grid');
     const card = document.createElement('div');
     card.className = 'budget-card';
     card.style.animation = 'rise .4s ease both';
     card.innerHTML = `<div class="bc-top"><h3>${cat}</h3><span class="pill pill-green">On track</span></div>
       <div class="prog-track"><div class="prog-fill fill-green" style="width:0%"></div></div>
-      <div class="bc-foot"><span>$0 spent</span><span>of $${limit.toLocaleString()} limit</span></div>`;
+      <div class="bc-foot"><span>${sym}0 spent</span><span>of ${sym}${limit.toLocaleString()} limit</span></div>`;
     grid.prepend(card);
     e.target.reset();
     document.getElementById('create-budget-modal').classList.remove('open');
