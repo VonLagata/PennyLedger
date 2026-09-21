@@ -12,6 +12,7 @@ document.addEventListener('DOMContentLoaded', () => {
   setupSignupValidation();
   animateProgressBars();
   setupModals();
+  setupTransactionFilters();
   setupLogout();
   setupScrollReveal();
 });
@@ -588,16 +589,8 @@ function setupModals(){
         const card = document.createElement('div');
         card.className = 'goal-card';
         card.style.animation = 'rise .4s ease both';
-        card.innerHTML = `
-          <div class="gc-top">
-            <div class="gc-icon"><i></i></div>
-            <div>
-              <strong>${escapeHtml(name)}</strong>
-              <span>Target: ${escapeHtml(by)}</span>
-            </div>
-          </div>
-          <div class="prog-track"><div class="prog-fill fill-green" style="width:${pct}%"></div></div>
-          <div class="gc-foot"><span>${sym}${saved.toLocaleString()} saved of ${sym}${target.toLocaleString()}</span><b>${pct}%</b></div>`;
+        card.innerHTML = goalCardMarkup();
+        updateGoalCard(card, { name, target, saved, date: by });
         grid.prepend(card);
       }
 
@@ -606,6 +599,232 @@ function setupModals(){
       showToast('Goal added');
     });
   }
+
+  // Add Budget -> prepend a progress row to the Budget Progress card (if present)
+  const budgetForm = document.querySelector('#add-budget-form');
+  if (budgetForm){
+    budgetForm.addEventListener('submit', e => {
+      e.preventDefault();
+      const category = budgetForm.querySelector('#budget-category').value;
+      const amount = parseFloat(budgetForm.querySelector('#budget-amount').value || '0');
+      const sym = getCurrencySymbol();
+
+      const list = document.querySelector('#budget-progress-list');
+      if (list){
+        const row = document.createElement('div');
+        row.className = 'prog-row';
+        row.style.animation = 'rise .4s ease both';
+        row.innerHTML = `
+          <div class="prow-top"><span>${escapeHtml(category)}</span><span>${sym}0.00 / ${sym}${amount.toFixed(2)}</span></div>
+          <div class="prog-track"><div class="prog-fill fill-green" data-value="0" style="width:0%"></div></div>`;
+        list.prepend(row);
+      }
+
+      budgetForm.reset();
+      document.getElementById('add-budget-modal').classList.remove('open');
+      showToast('Budget added');
+    });
+  }
+
+  // Estimate Monthly Income -> update the Monthly Income stat card (if present)
+  const incomeForm = document.querySelector('#estimate-income-form');
+  if (incomeForm){
+    incomeForm.addEventListener('submit', e => {
+      e.preventDefault();
+      const amount = parseFloat(incomeForm.querySelector('#income-amount').value || '0');
+      const frequency = incomeForm.querySelector('#income-frequency').value;
+
+      const MULTIPLIER = { weekly: 4.33, biweekly: 2.165, monthly: 1, annually: 1 / 12 };
+      const monthly = amount * (MULTIPLIER[frequency] ?? 1);
+
+      const statEl = document.querySelector('#monthly-income-value');
+      if (statEl){
+        statEl.textContent = formatCurrency(monthly);
+      }
+
+      incomeForm.reset();
+      document.getElementById('estimate-income-modal').classList.remove('open');
+      showToast('Monthly income estimate updated');
+    });
+  }
+
+  // Edit Goal -> update name / target / saved / date on a specific goal card
+  const editGoalForm = document.querySelector('#edit-goal-form');
+  const goalsGrid = document.querySelector('#goals-grid');
+  if (editGoalForm && goalsGrid){
+    let editingCard = null;
+
+    goalsGrid.addEventListener('click', e => {
+      const btn = e.target.closest('.gc-edit');
+      if (!btn) return;
+      editingCard = btn.closest('.goal-card');
+      editGoalForm.querySelector('#edit-goal-name').value = editingCard.dataset.name || '';
+      editGoalForm.querySelector('#edit-goal-target').value = editingCard.dataset.target || '';
+      editGoalForm.querySelector('#edit-goal-saved').value = editingCard.dataset.saved || '0';
+      editGoalForm.querySelector('#edit-goal-date').value = editingCard.dataset.date === 'No date set' ? '' : (editingCard.dataset.date || '');
+      document.getElementById('edit-goal-modal').classList.add('open');
+    });
+
+    editGoalForm.addEventListener('submit', e => {
+      e.preventDefault();
+      if (!editingCard) return;
+      updateGoalCard(editingCard, {
+        name: editGoalForm.querySelector('#edit-goal-name').value.trim() || editingCard.dataset.name,
+        target: parseFloat(editGoalForm.querySelector('#edit-goal-target').value || '0'),
+        saved: parseFloat(editGoalForm.querySelector('#edit-goal-saved').value || '0'),
+        date: editGoalForm.querySelector('#edit-goal-date').value.trim() || 'No date set'
+      });
+      editingCard = null;
+      document.getElementById('edit-goal-modal').classList.remove('open');
+      showToast('Goal updated');
+    });
+  }
+}
+
+/* Transactions page: category / month / type filters + archive (front-end only) */
+function setupTransactionFilters(){
+  const tbody = document.querySelector('#tx-table-body');
+  if (!tbody) return;
+
+  const searchEl   = document.getElementById('tx-search');
+  const categoryEl = document.getElementById('tx-filter-category');
+  const monthEl    = document.getElementById('tx-filter-month');
+  const resetEl    = document.getElementById('tx-filter-reset');
+  const typeSeg    = document.getElementById('tx-type-seg');
+  const viewSeg    = document.getElementById('tx-view-seg');
+  const countEl    = document.getElementById('tx-result-count');
+  const archCount  = document.getElementById('tx-archived-count');
+  const emptyRow   = document.getElementById('tx-empty-row');
+  const emptyText  = document.getElementById('tx-empty-text');
+
+  const state = { type: 'all', view: 'active' };
+  const getRows = () => Array.from(tbody.querySelectorAll('tr')).filter(r => r !== emptyRow);
+  const rowCategory = r => (r.querySelector('.td-category')?.textContent || '').trim();
+  const rowMonth = r => (r.querySelector('[data-raw-date]')?.dataset.rawDate || '').slice(0, 7);
+  const rowIsIncome = r => !!r.querySelector('.td-amount.amt-pos');
+
+  // Fill the category + month dropdowns from the rows that are on the page
+  const cats = [...new Set(getRows().map(rowCategory).filter(Boolean))].sort();
+  cats.forEach(c => categoryEl.add(new Option(c, c)));
+
+  const months = [...new Set(getRows().map(rowMonth).filter(Boolean))].sort().reverse();
+  months.forEach(key => {
+    const [y, mo] = key.split('-').map(Number);
+    const label = new Date(y, mo - 1, 1).toLocaleString('en-US', { month: 'long', year: 'numeric' });
+    monthEl.add(new Option(label, key));
+  });
+
+  function apply(){
+    const q = (searchEl.value || '').trim().toLowerCase();
+    let shown = 0, inView = 0, archived = 0;
+
+    getRows().forEach(row => {
+      const isArchived = row.dataset.archived === 'true';
+      if (isArchived) archived++;
+
+      const btn = row.querySelector('.btn-archive');
+      if (btn){
+        btn.querySelector('span').textContent = isArchived ? 'Restore' : 'Archive';
+        btn.setAttribute('aria-label', isArchived ? 'Restore transaction' : 'Archive transaction');
+      }
+
+      const inThisView = state.view === 'archived' ? isArchived : !isArchived;
+      if (inThisView) inView++;
+
+      const text = ((row.querySelector('.td-desc')?.textContent || '') + ' ' + rowCategory(row)).toLowerCase();
+      const match = inThisView
+        && (!categoryEl.value || rowCategory(row) === categoryEl.value)
+        && (!monthEl.value || rowMonth(row) === monthEl.value)
+        && (state.type === 'all' || (state.type === 'income') === rowIsIncome(row))
+        && (!q || text.includes(q));
+
+      row.hidden = !match;
+      if (match) shown++;
+    });
+
+    if (archCount) archCount.textContent = archived;
+    if (countEl) countEl.textContent = `Showing ${shown} of ${inView} ${state.view === 'archived' ? 'archived ' : ''}transactions`;
+    if (emptyRow){
+      emptyRow.hidden = shown > 0;
+      if (emptyText) emptyText.textContent = inView === 0
+        ? (state.view === 'archived' ? 'No archived transactions yet.' : 'No active transactions.')
+        : 'No transactions match your filters.';
+    }
+  }
+
+  function bindSeg(seg, key, attr){
+    seg.addEventListener('click', e => {
+      const btn = e.target.closest('.seg-btn');
+      if (!btn) return;
+      seg.querySelectorAll('.seg-btn').forEach(b => b.classList.toggle('active', b === btn));
+      state[key] = btn.dataset[attr];
+      apply();
+    });
+  }
+  bindSeg(typeSeg, 'type', 'type');
+  bindSeg(viewSeg, 'view', 'view');
+
+  searchEl.addEventListener('input', apply);
+  categoryEl.addEventListener('change', apply);
+  monthEl.addEventListener('change', apply);
+
+  resetEl.addEventListener('click', () => {
+    searchEl.value = '';
+    categoryEl.value = '';
+    monthEl.value = '';
+    state.type = 'all';
+    typeSeg.querySelectorAll('.seg-btn').forEach(b => b.classList.toggle('active', b.dataset.type === 'all'));
+    apply();
+  });
+
+  // Archive / Restore a single log
+  tbody.addEventListener('click', e => {
+    const btn = e.target.closest('.btn-archive');
+    if (!btn) return;
+    const row = btn.closest('tr');
+    const nowArchived = row.dataset.archived !== 'true';
+    row.dataset.archived = nowArchived ? 'true' : 'false';
+    apply();
+    showToast(nowArchived ? 'Transaction archived' : 'Transaction restored');
+  });
+
+  apply();
+}
+
+/* Goal card helpers (shared by Add Goal and Edit Goal) */
+function goalMoney(n){
+  return getCurrencySymbol() + Number(n || 0).toLocaleString('en-US', { maximumFractionDigits: 2 });
+}
+
+function goalCardMarkup(){
+  return `
+    <div class="gc-top">
+      <div class="gc-icon"><i></i></div>
+      <div><strong></strong><span></span></div>
+      <button type="button" class="gc-edit" aria-label="Edit goal" title="Edit goal">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+      </button>
+    </div>
+    <div class="prog-track"><div class="prog-fill fill-green"></div></div>
+    <div class="gc-foot"><span></span><b></b></div>`;
+}
+
+function updateGoalCard(card, goal){
+  const pct = goal.target > 0 ? Math.min(100, Math.round((goal.saved / goal.target) * 100)) : 0;
+  card.dataset.name = goal.name;
+  card.dataset.target = goal.target;
+  card.dataset.saved = goal.saved;
+  card.dataset.date = goal.date;
+
+  card.querySelector('.gc-top strong').textContent = goal.name;
+  card.querySelector('.gc-top span').textContent = 'Target: ' + goal.date;
+
+  const fill = card.querySelector('.prog-fill');
+  fill.dataset.value = pct;
+  fill.style.width = pct + '%';
+
+  card.querySelector('.gc-foot span').textContent = `${goalMoney(goal.saved)} saved of ${goalMoney(goal.target)}`;
+  card.querySelector('.gc-foot b').textContent = pct + '%';
 }
 
 function pillClass(category){
