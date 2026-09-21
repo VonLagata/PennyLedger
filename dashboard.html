@@ -59,10 +59,20 @@
           <h1>Good afternoon, Alex</h1>
           <p>Here's what's happening with your money</p>
         </div>
-        <button class="btn btn-primary btn-sm" data-open-modal="add-transaction-modal">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          Add Transaction
-        </button>
+        <div class="quick-actions">
+          <button class="btn btn-outline btn-sm" data-open-modal="estimate-income-modal">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+            Estimate Monthly Income
+          </button>
+          <button class="btn btn-outline btn-sm" data-open-modal="add-budget-modal">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="14" rx="2"/><path d="M2 10h20"/><circle cx="17" cy="15" r="1"/></svg>
+            Add Budget
+          </button>
+          <button class="btn btn-primary btn-sm" data-open-modal="add-transaction-modal">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Add Transaction
+          </button>
+        </div>
       </div>
 
       <div class="stat-grid">
@@ -80,7 +90,7 @@
             <span class="stat-delta up">+2.1%</span>
           </div>
           <p class="stat-label">Monthly Income</p>
-          <p class="stat-value">$6,250.00</p>
+          <p class="stat-value" id="monthly-income-value">$6,250.00</p>
         </div>
         <div class="stat-card" style="animation-delay:.1s">
           <div class="stat-top">
@@ -108,6 +118,7 @@
               <span class="muted-tag">This Month</span>
             </div>
 
+            <div id="budget-progress-list">
             <div class="prog-row">
               <div class="prow-top"><span>Groceries</span><span>$420 / $500</span></div>
               <div class="prog-track"><div class="prog-fill fill-green" data-value="84"></div></div>
@@ -123,6 +134,7 @@
             <div class="prog-row">
               <div class="prow-top"><span>Entertainment</span><span>$90 / $150</span></div>
               <div class="prog-track"><div class="prog-fill fill-blue" data-value="60"></div></div>
+            </div>
             </div>
           </div>
 
@@ -220,6 +232,61 @@
       <div class="modal-actions">
         <button type="button" class="btn btn-outline" data-close-modal>Cancel</button>
         <button type="submit" class="btn btn-primary">Add Transaction</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Add Budget modal -->
+<div class="modal-overlay" id="add-budget-modal">
+  <div class="modal">
+    <div class="modal-head"><h3>Add Budget</h3>
+      <button class="modal-close" data-close-modal aria-label="Close">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <form id="add-budget-form">
+      <div class="field"><label for="budget-category">Category</label>
+        <select id="budget-category">
+          <option>Groceries</option><option>Entertainment</option>
+          <option>Transportation</option><option>Housing</option><option>Utilities</option><option>Dining Out</option>
+        </select>
+      </div>
+      <div class="field"><label for="budget-amount">Budget Amount ($)</label><div class="input-wrap"><input type="number" step="0.01" id="budget-amount" placeholder="0.00" required></div></div>
+      <div class="field"><label for="budget-period">Period</label>
+        <select id="budget-period">
+          <option>This Month</option><option>Next Month</option><option>This Quarter</option>
+        </select>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-outline" data-close-modal>Cancel</button>
+        <button type="submit" class="btn btn-primary">Add Budget</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Estimate Monthly Income modal -->
+<div class="modal-overlay" id="estimate-income-modal">
+  <div class="modal">
+    <div class="modal-head"><h3>Estimate Monthly Income</h3>
+      <button class="modal-close" data-close-modal aria-label="Close">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <form id="estimate-income-form">
+      <div class="field"><label for="income-amount">Pay Amount ($)</label><div class="input-wrap"><input type="number" step="0.01" id="income-amount" placeholder="0.00" required></div></div>
+      <div class="field"><label for="income-frequency">Pay Frequency</label>
+        <select id="income-frequency">
+          <option value="weekly">Weekly</option>
+          <option value="biweekly">Every 2 Weeks</option>
+          <option value="monthly" selected>Monthly</option>
+          <option value="annually">Annually</option>
+        </select>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-outline" data-close-modal>Cancel</button>
+        <button type="submit" class="btn btn-primary">Estimate</button>
       </div>
     </form>
   </div>
