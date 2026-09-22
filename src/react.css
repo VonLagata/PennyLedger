@@ -1,0 +1,141 @@
+/* React-specific layout, accessible dialogs, and print support. */
+.page-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+.auth-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.settings-save {
+  margin-top: 18px;
+}
+.report-caption {
+  font-size: 0.82rem;
+  color: var(--muted);
+  margin-bottom: 16px;
+  line-height: 1.6;
+}
+.auth-error {
+  color: #fff;
+  background: rgba(120, 0, 0, 0.4);
+  border-radius: 8px;
+  padding: 10px;
+  margin-bottom: 16px;
+  font-size: 0.85rem;
+}
+.form-error {
+  font-size: 0.85rem;
+  color: var(--danger);
+  margin-top: 10px;
+}
+.auth-card .demo-note {
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.8);
+  margin: 20px 0 0;
+  text-align: center;
+}
+.profile-photo {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+.modal {
+  max-height: calc(100dvh - 40px);
+  overflow-y: auto;
+}
+.report-type {
+  color: var(--ink);
+}
+.print-title {
+  display: none;
+}
+.toast:empty {
+  display: none;
+}
+.tx-name,
+.gc-top strong,
+.bc-top h3 {
+  overflow-wrap: anywhere;
+}
+.side-profile .who {
+  min-width: 0;
+}
+.side-profile .who span {
+  overflow-wrap: anywhere;
+}
+@media (max-width: 760px) {
+  .settings-row {
+    flex-wrap: wrap;
+  }
+  .topbar {
+    gap: 10px;
+  }
+  .topbar .search-box {
+    width: 100%;
+    max-width: 240px;
+  }
+  .page-heading .quick-actions {
+    gap: 8px;
+  }
+  .tx-table .td-empty {
+    grid-area: auto;
+    grid-column: 1/-1;
+  }
+  .archive-table .td-empty {
+    grid-column: 1/-1;
+  }
+}
+@media print {
+  :root,
+  html[data-theme="dark"] {
+    --ink: #16211c;
+    --ink-soft: #3c463f;
+    --muted: #6e7c72;
+    --card: #fff;
+    --app-bg: #fff;
+    color-scheme: light;
+  }
+  .sidebar,
+  .topbar,
+  .page-title,
+  .report-types,
+  .report-controls,
+  .report-actions,
+  .report-logs,
+  .toast,
+  .report-card > .card-head {
+    display: none !important;
+  }
+  .main,
+  .content {
+    display: block;
+    width: 100%;
+    max-width: none;
+    padding: 0;
+    margin: 0;
+  }
+  .card {
+    border: none;
+    box-shadow: none;
+  }
+  .print-title {
+    display: block;
+    font-size: 18pt;
+    margin-bottom: 20px;
+  }
+  .report-summary,
+  .budget-summary {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  * {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+}
