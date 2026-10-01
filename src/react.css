@@ -1,0 +1,243 @@
+/* React-specific layout, accessible dialogs, and print support. */
+.page-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+.auth-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.settings-save {
+  margin-top: 18px;
+}
+.report-caption {
+  font-size: 0.82rem;
+  color: var(--muted);
+  margin-bottom: 16px;
+  line-height: 1.6;
+}
+.auth-error {
+  color: #fff;
+  background: rgba(120, 0, 0, 0.4);
+  border-radius: 8px;
+  padding: 10px;
+  margin-bottom: 16px;
+  font-size: 0.85rem;
+}
+.form-error {
+  font-size: 0.85rem;
+  color: var(--danger);
+  margin-top: 10px;
+}
+.auth-card .demo-note {
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.8);
+  margin: 20px 0 0;
+  text-align: center;
+}
+.profile-photo {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+.modal {
+  max-height: calc(100dvh - 40px);
+  overflow-y: auto;
+}
+.report-type {
+  color: var(--ink);
+}
+.print-title {
+  display: none;
+}
+.toast:empty {
+  display: none;
+}
+.tx-name,
+.gc-top strong,
+.bc-top h3 {
+  overflow-wrap: anywhere;
+}
+.side-profile .who {
+  min-width: 0;
+}
+.side-profile .who span {
+  overflow-wrap: anywhere;
+}
+@media (max-width: 760px) {
+  .settings-row {
+    flex-wrap: wrap;
+  }
+  .topbar {
+    gap: 10px;
+  }
+  .topbar .search-box {
+    width: 100%;
+    max-width: 240px;
+  }
+  .page-heading .quick-actions {
+    gap: 8px;
+  }
+  .tx-table .td-empty {
+    grid-area: auto;
+    grid-column: 1/-1;
+  }
+  .archive-table .td-empty {
+    grid-column: 1/-1;
+  }
+}
+@media print {
+  :root,
+  html[data-theme="dark"] {
+    --ink: #16211c;
+    --ink-soft: #3c463f;
+    --muted: #6e7c72;
+    --card: #fff;
+    --app-bg: #fff;
+    color-scheme: light;
+  }
+  .sidebar,
+  .topbar,
+  .page-title,
+  .report-types,
+  .report-controls,
+  .report-actions,
+  .report-logs,
+  .toast,
+  .report-card > .card-head {
+    display: none !important;
+  }
+  .main,
+  .content {
+    display: block;
+    width: 100%;
+    max-width: none;
+    padding: 0;
+    margin: 0;
+  }
+  .card {
+    border: none;
+    box-shadow: none;
+  }
+  .print-title {
+    display: block;
+    font-size: 18pt;
+    margin-bottom: 20px;
+  }
+  .budget-summary {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  * {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+}
+
+/* Administration reuses the client design tokens and shared controls. */
+.admin-badge {
+  color: #fff;
+  padding: 0 10px 20px;
+  font-size: 0.8rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.admin-section {
+  margin-bottom: 18px;
+}
+.admin-toolbar,
+.admin-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.admin-toolbar {
+  margin-bottom: 18px;
+}
+.admin-toolbar .search-box {
+  flex: 1;
+  min-width: 0;
+}
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+.admin-table th,
+.admin-table td {
+  text-align: left;
+  padding: 14px 10px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: middle;
+}
+.admin-table th {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+.admin-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+.admin-email {
+  display: block;
+  color: var(--muted);
+  margin-top: 5px;
+  overflow-wrap: anywhere;
+}
+.admin-fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+.admin-registration {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.admin-divider {
+  border: 0;
+  border-top: 1px solid var(--line);
+  margin: 24px 0;
+}
+.demo-accounts {
+  margin-top: 28px;
+  padding: 22px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--card);
+}
+.demo-accounts h2 {
+  font-size: 1rem;
+  margin-bottom: 16px;
+}
+.demo-accounts div + div {
+  margin-top: 16px;
+}
+.demo-accounts strong,
+.demo-accounts span,
+.demo-accounts code {
+  display: block;
+  overflow-wrap: anywhere;
+  line-height: 1.7;
+}
+.demo-accounts span {
+  color: var(--muted);
+}
+button:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+@media (max-width: 760px) {
+  .admin-table {
+    min-width: 650px;
+  }
+  .admin-toolbar .search-box {
+    flex-basis: 100%;
+  }
+}

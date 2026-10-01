@@ -1,0 +1,4 @@
+# The upload endpoint accepts image data only. Never execute uploaded files.
+<FilesMatch "\.(php|phtml|phar|cgi|pl)$">
+    Require all denied
+</FilesMatch>
