@@ -2,31 +2,105 @@ import { useAuth } from "../state/AuthContext";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useApp } from "../state/AppContext";
-import { BudgetRow, Icon, ProgressBar } from "../components/UI";
+import {
+  BudgetRow,
+  Field,
+  FormActions,
+  Icon,
+  Modal,
+  PasswordField,
+  ProgressBar,
+} from "../components/UI";
 import {
   BudgetModal,
-  IncomeModal,
   TransactionModal,
 } from "../components/Forms";
-import { progress } from "../lib/format";
+import { progress, localDate } from "../lib/format";
+import { ledgerTotals } from "../lib/ledger-totals";
+
+function WalletModal({ wallet, onClose }) {
+  const { createWallet, updateWallet, deleteWallet, currency, notify } = useApp();
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  return (
+    <Modal title={deleting ? 'Delete wallet?' : wallet ? 'Edit wallet' : 'Add wallet'} onClose={onClose}>
+      <form onSubmit={async (event) => {
+        event.preventDefault();
+        const form = new FormData(event.currentTarget);
+        setBusy(true);
+        setError("");
+        try {
+          if (deleting) {
+            await deleteWallet(wallet.id, form.get('password'));
+          } else {
+            const values = {
+              name: form.get('name').trim(),
+              kind: wallet?.isDefault ? 'cash' : form.get('kind'),
+              balance: Number(form.get('balance')),
+              ...(wallet ? { reason: form.get('reason') } : {}),
+            };
+            if (wallet) await updateWallet(wallet.id, values);
+            else await createWallet(values);
+          }
+          notify(deleting ? 'Wallet deleted' : wallet ? 'Wallet updated' : 'Wallet added');
+          onClose();
+        } catch (failure) {
+          setError(failure.message);
+        } finally {
+          setBusy(false);
+        }
+      }}>
+        <fieldset disabled={busy} className="admin-fieldset">
+          {deleting ? (
+            <>
+              <p className="report-caption">Delete {wallet.name}? Its balance will be removed from Total Balance. Existing transactions will be kept.</p>
+              <PasswordField label="Confirm your password" name="password" autoComplete="current-password" required />
+            </>
+          ) : (
+            <>
+              <Field label="Wallet name" name="name" readOnly={wallet?.isDefault} defaultValue={wallet?.name || ''} placeholder="e.g. GCash, Bank card, Cash" maxLength={50} required />
+              <div className="field">
+                <label htmlFor="wallet-kind">Type</label>
+                <select id="wallet-kind" name="kind" disabled={wallet?.isDefault} defaultValue={wallet?.kind || 'digital'}>
+                  <option value="digital">Digital wallet</option>
+                  <option value="bank">Bank card</option>
+                  <option value="cash">Physical money</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+              <Field label={`Current balance (${currency})`} name="balance" defaultValue={wallet?.balance ?? ''} type="number" min="-99999999.99" max="99999999.99" step="0.01" required />
+              {wallet && <Field label="Adjustment reason" name="reason" defaultValue="Balance reconciliation" maxLength={200} required />}
+              <p className="report-caption">{wallet ? 'Changing this amount corrects your current balance; it does not record income.' : 'This is your opening balance. It does not count as income.'}</p>
+            </>
+          )}
+          {error && <p role="alert" className="form-error">{error}</p>}
+          {wallet && !wallet.isDefault && !deleting && (
+            <button type="button" className="btn btn-danger btn-sm" onClick={() => { setDeleting(true); setError(''); }}>Delete wallet</button>
+          )}
+          <FormActions onClose={onClose} label={busy ? 'Please wait…' : deleting ? 'Confirm deletion' : wallet ? 'Save changes' : 'Add wallet'} />
+        </fieldset>
+      </form>
+    </Modal>
+  );
+}
 
 export default function Dashboard() {
-  const { transactions, budgets, goals, income, profile, money, date } =
+  const { transactions, budgets: allBudgets, wallets, goals, profile, money, date } =
     useApp();
   const [modal, setModal] = useState(null);
+  const [walletModal, setWalletModal] = useState(false);
+  const [manageWallets, setManageWallets] = useState(false);
+  const [editingWallet, setEditingWallet] = useState(null);
   // Every saved transaction contributes to the totals; the old demo-only
   // calculation ignored records loaded from MySQL.
-  const balance = transactions.reduce((sum, tx) => sum + tx.amount, 0);
-  const currentMonth = new Date().toISOString().slice(0, 7);
-  const expenses = transactions.filter((tx) => tx.date.startsWith(currentMonth))
-    .reduce((sum, tx) => sum + (tx.amount < 0 ? -tx.amount : 0), 0);
-  const remaining = budgets.reduce(
-    (sum, budget) => sum + budget.limit - budget.spent,
-    0,
-  );
-  const spending = budgets
-    .map((budget) => ({ name: budget.category, amount: budget.spent }))
-    .filter((item) => item.amount > 0);
+  const { balance, income, expenses, remaining, monthlyBudgets: budgets } = ledgerTotals(transactions, allBudgets, wallets);
+  const overBudget = budgets.some((budget) => budget.spent > budget.limit);
+  const categorySpending = new Map();
+  for (const tx of transactions.filter((tx) => tx.amount < 0 && tx.date.startsWith(localDate().slice(0, 7)))) {
+    categorySpending.set(tx.category, (categorySpending.get(tx.category) || 0) - tx.amount);
+  }
+  const spending = [...categorySpending].map(([name, amount]) => ({ name, amount }));
   const total = spending.reduce((sum, item) => sum + item.amount, 0);
   const colors = [
     "var(--success)",
@@ -51,8 +125,8 @@ export default function Dashboard() {
     [
       "Remaining Budget",
       money(remaining),
-      remaining >= 0 ? "On track" : "Over budget",
-      remaining >= 0 ? "flat" : "down",
+      overBudget || remaining < 0 ? "Over budget" : "On track",
+      overBudget || remaining < 0 ? "down" : "flat",
     ],
   ];
   return (
@@ -63,13 +137,6 @@ export default function Dashboard() {
           <p>Here's what's happening with your money</p>
         </div>
         <div className="quick-actions">
-          <button
-            className="btn btn-outline btn-sm"
-            onClick={() => setModal("income")}
-          >
-            <Icon name="budget" />
-            Estimate Monthly Income
-          </button>
           <button
             className="btn btn-outline btn-sm"
             onClick={() => setModal("budget")}
@@ -100,12 +167,48 @@ export default function Dashboard() {
               >
                 <i style={{ background: "var(--blue)" }} />
               </div>
-              <span className={`stat-delta ${tone}`}>{delta}</span>
+              {label === "Total Balance" ? (
+                <button
+                  type="button"
+                  className="btn btn-outline btn-sm wallet-toggle"
+                  aria-label="eWallet"
+                  title={manageWallets ? "Hide eWallets" : "Show eWallets"}
+                  aria-expanded={manageWallets}
+                  aria-controls="wallet-panel"
+                  onClick={() => setManageWallets(!manageWallets)}
+                >
+                  <Icon name="wallet" />
+                  <span>eWallet</span>
+                </button>
+              ) : (
+                <span className={`stat-delta ${tone}`}>{delta}</span>
+              )}
             </div>
             <p className="stat-label">{label}</p>
             <p className="stat-value">{value}</p>
           </div>
         ))}
+      </div>
+      <div id="wallet-panel" className={`wallet-reveal${manageWallets ? ' is-open' : ''}`} inert={!manageWallets} aria-hidden={!manageWallets}>
+        <div className="wallet-reveal-inner">
+          <section className="card wallet-section">
+            <div className="card-head">
+              <h2>EWallet · Total Balance {money(balance)}</h2>
+              <button className="btn btn-primary btn-sm" onClick={() => setWalletModal(true)}><Icon name="plus" /> Add wallet</button>
+            </div>
+            <div className="wallet-grid">
+              {wallets.map((wallet) => (
+                <article className="wallet-card" key={wallet.id}>
+                  <button className="btn btn-outline btn-sm wallet-edit" aria-label={`Edit ${wallet.name}`} onClick={() => setEditingWallet(wallet)}>Edit</button>
+                  <h3>{wallet.name}</h3>
+                  <span className="report-caption">{{ bank: 'Bank card', digital: 'Digital wallet', cash: 'Physical money', other: 'Other' }[wallet.kind]}</span>
+                  <strong>{money(wallet.balance)}</strong>
+                </article>
+              ))}
+            </div>
+            {!wallets.length && <p className="report-caption">Add a bank card, digital wallet, or cash balance.</p>}
+          </section>
+        </div>
       </div>
       <div className="dash-grid">
         <div className="dash-col">
@@ -212,7 +315,8 @@ export default function Dashboard() {
         <TransactionModal onClose={() => setModal(null)} />
       )}
       {modal === "budget" && <BudgetModal onClose={() => setModal(null)} />}
-      {modal === "income" && <IncomeModal onClose={() => setModal(null)} />}
+      {walletModal && <WalletModal onClose={() => setWalletModal(false)} />}
+      {editingWallet && <WalletModal wallet={editingWallet} onClose={() => setEditingWallet(null)} />}
     </>
   );
 }

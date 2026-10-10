@@ -67,8 +67,15 @@ if ($profileAction === '') {
     }
 
     if ($method === 'DELETE') {
+        $input = get_json_input();
+        require_fields($input, ['password']);
+        $check = mysqli_prepare($conn, 'SELECT password FROM Users WHERE user_id = ?');
+        mysqli_stmt_bind_param($check, 'i', $userId);
+        mysqli_stmt_execute($check);
+        $secret = mysqli_fetch_assoc(mysqli_stmt_get_result($check));
+        if (!is_string($input['password']) || !password_verify($input['password'], $secret['password'])) send_error('Incorrect password', 403);
         mysqli_begin_transaction($conn);
-        $stmt = mysqli_prepare($conn, "UPDATE Users SET status = 'suspended', deleted_at = NOW() WHERE user_id = ?");
+        $stmt = mysqli_prepare($conn, "UPDATE Users SET status = 'deleted', deleted_at = NOW() WHERE user_id = ?");
         mysqli_stmt_bind_param($stmt, 'i', $userId);
         mysqli_stmt_execute($stmt);
         $tokens = mysqli_prepare($conn, 'DELETE FROM Tokens WHERE user_id = ?');

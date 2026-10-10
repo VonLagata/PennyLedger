@@ -21,7 +21,27 @@ $queries = [
 ];
 
 if (!isset($queries[$lookup])) send_error('Lookup not found', 404);
-$rows = mysqli_fetch_all(mysqli_query($conn, $queries[$lookup]), MYSQLI_ASSOC);
+if ($lookup === 'categories') {
+    $user = require_auth($conn);
+    $userId = (int) $user['user_id'];
+    // Suggest only categories this account has saved, never seeded defaults
+    // or categories used exclusively by another account.
+    $stmt = mysqli_prepare($conn, 'SELECT c.category_id AS id, c.category_name AS name, c.transaction_type_id AS transactionTypeId, tt.code AS type FROM Categories c JOIN TransactionTypes tt ON tt.transaction_type_id = c.transaction_type_id WHERE EXISTS (SELECT 1 FROM Transactions t WHERE t.category_id = c.category_id AND t.user_id = ?) OR EXISTS (SELECT 1 FROM Budgets b WHERE b.category_id = c.category_id AND b.user_id = ?) ORDER BY c.category_name');
+    mysqli_stmt_bind_param($stmt, 'ii', $userId, $userId);
+    mysqli_stmt_execute($stmt);
+    $rows = mysqli_fetch_all(mysqli_stmt_get_result($stmt), MYSQLI_ASSOC);
+} elseif ($lookup === 'payment-methods') {
+    $user = require_auth($conn);
+    $userId = (int) $user['user_id'];
+    require_once __DIR__ . '/../helpers/wallets.php';
+    ensure_physical_money($conn, $userId);
+    $stmt = mysqli_prepare($conn, 'SELECT w.payment_method_id AS id, w.name FROM Wallets w WHERE w.user_id = ? AND w.deleted_at IS NULL ORDER BY w.is_default DESC, w.name');
+    mysqli_stmt_bind_param($stmt, 'i', $userId);
+    mysqli_stmt_execute($stmt);
+    $rows = mysqli_fetch_all(mysqli_stmt_get_result($stmt), MYSQLI_ASSOC);
+} else {
+    $rows = mysqli_fetch_all(mysqli_query($conn, $queries[$lookup]), MYSQLI_ASSOC);
+}
 
 // Convert database ID strings to numbers before returning JSON to React.
 foreach ($rows as &$row) {

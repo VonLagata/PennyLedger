@@ -10,8 +10,9 @@ $allowedOrigin = getenv('APP_ORIGIN') ?: 'http://127.0.0.1:5173';
 header("Access-Control-Allow-Origin: {$allowedOrigin}");
 header('Vary: Origin');
 header('Access-Control-Allow-Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, Idempotency-Key');
 header('Content-Type: application/json; charset=utf-8');
+
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(204);
@@ -38,7 +39,17 @@ $id = isset($segments[1]) && ctype_digit($segments[1]) ? (int) $segments[1] : nu
 $action = $segments[2] ?? null;
 $method = $_SERVER['REQUEST_METHOD'];
 
+require __DIR__ . '/../helpers/write_request.php';
 switch ($resource) {
+    case 'wallet-history':
+        require __DIR__ . '/../controllers/wallet_history_controller.php';
+        break;
+    case 'wallet-transfers':
+        require __DIR__ . '/../controllers/transfers_controller.php';
+        break;
+    case 'wallets':
+        require __DIR__ . '/../controllers/wallets_controller.php';
+        break;
     case 'auth':
         $authAction = $segments[1] ?? '';
         require __DIR__ . '/../controllers/auth_controller.php';

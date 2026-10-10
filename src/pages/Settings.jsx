@@ -3,7 +3,7 @@ import { api } from "../lib/api";
 import { useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useApp } from "../state/AppContext";
-import { DATE_FORMATS, download } from "../lib/format";
+import { DATE_FORMATS, download, formatDate, localDate } from "../lib/format";
 import {
   Field,
   Modal,
@@ -39,14 +39,16 @@ export default function Settings() {
   const [passwordError, setPasswordError] = useState("");
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteText, setDeleteText] = useState("");
+  const [deletePassword, setDeletePassword] = useState("");
   const photoInput = useRef(null);
   async function saveProfile(event) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
-    const name = form.get("name").trim();
-    if (!name) return notify("Please enter your name.");
+    const firstName = form.get("first_name").trim();
+    const lastName = form.get("last_name").trim();
+    if (!firstName || !lastName) return notify("Please enter your first and last name.");
     try {
-      const revised = await updateIdentity(name, form.get("email"), form.get("phone").trim());
+      const revised = await updateIdentity(firstName, lastName, form.get("email"), form.get("phone").trim());
       updateProfile(revised);
     } catch (error) {
       return notify(error.message);
@@ -148,11 +150,12 @@ export default function Settings() {
           <form onSubmit={saveProfile}>
             <div className="settings-fields">
               <Field
-                label="Full Name"
-                name="name"
-                defaultValue={profile.name}
+                label="First name"
+                name="first_name"
+                defaultValue={profile.firstName}
                 required
               />
+              <Field label="Last name" name="last_name" defaultValue={profile.lastName} required maxLength={100} />
               <Field
                 label="Email"
                 name="email"
@@ -216,7 +219,7 @@ export default function Settings() {
               }}
             >
               {DATE_FORMATS.map((value) => (
-                <option key={value}>{value}</option>
+                <option key={value} value={value}>{formatDate(localDate(), value)}</option>
               ))}
             </select>
           </SettingRow>
@@ -261,26 +264,7 @@ export default function Settings() {
               Update Password
             </button>
           </form>
-          <SettingRow
-            title="Two-factor authentication"
-            description="Requires a connected authentication service"
-          >
-            <label className="switch">
-              <input
-                type="checkbox"
-                aria-label="Two-factor authentication"
-                checked={false}
-                onChange={() =>
-                  notify(
-                    "Two-factor authentication requires a backend connection.",
-                  )
-                }
-              />
-              <span className="switch-track">
-                <span className="switch-thumb" />
-              </span>
-            </label>
-          </SettingRow>
+
         </section>
         <section className="card settings-card">
           <div className="card-head">
@@ -313,9 +297,10 @@ export default function Settings() {
                   profile,
                   transactions: app.transactions,
                   budgets: app.budgets,
+                  wallets: app.wallets,
                   goals: app.goals,
                   reports: app.reports,
-                  monthlyIncome: app.income,
+
                   preferences: { currency, dateFormat, theme: app.theme },
                 };
                 download(
@@ -358,6 +343,7 @@ export default function Settings() {
             placeholder="DELETE"
           />
           <div className="modal-actions">
+            <PasswordField label="Confirm your password" value={deletePassword} onChange={(event) => setDeletePassword(event.target.value)} autoComplete="current-password" required />
             <button
               className="btn btn-outline"
               onClick={() => setDeleteOpen(false)}
@@ -370,7 +356,7 @@ export default function Settings() {
                 if (deleteText !== "DELETE")
                   return notify("Type DELETE to confirm");
                 try {
-                  await api("/profile", { method: "DELETE" });
+                  await api("/profile", { method: "DELETE", body: { password: deletePassword } });
                   await logout().catch(() => {});
                   setDeleteOpen(false);
                   setDeleteText("");

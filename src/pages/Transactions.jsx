@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useApp } from "../state/AppContext";
 import { Icon, PageTitle, Segments } from "../components/UI";
-import { TransactionModal } from "../components/Forms";
 
 export function TransactionTable({ records, restoreOnly = false }) {
   const { money, date, archiveTransaction, notify } = useApp();
@@ -75,7 +74,6 @@ export default function Transactions() {
   const [month, setMonth] = useState("");
   const [type, setType] = useState("all");
   const [view, setView] = useState("active");
-  const [modal, setModal] = useState(false);
   useEffect(() => {
     setSearch(params.get("q") || "");
   }, [params]);
@@ -98,17 +96,9 @@ export default function Transactions() {
   return (
     <>
       <PageTitle
-        title="Transactions"
+        title="Transaction history"
         description="All your income and expenses in one place"
-      >
-        <button
-          className="btn btn-primary btn-sm"
-          onClick={() => setModal(true)}
-        >
-          <Icon name="plus" />
-          Add Transaction
-        </button>
-      </PageTitle>
+      />
       <div className="filter-bar">
         <div className="search-box">
           <Icon name="search" />
@@ -190,7 +180,6 @@ export default function Transactions() {
       <div className="card">
         <TransactionTable records={records} />
       </div>
-      {modal && <TransactionModal onClose={() => setModal(false)} />}
     </>
   );
 }

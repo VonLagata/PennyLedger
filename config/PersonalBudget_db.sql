@@ -209,7 +209,7 @@ CREATE TABLE Tokens(
 ALTER TABLE Users
     MODIFY password VARCHAR(255) NOT NULL,
     ADD COLUMN role ENUM('user', 'admin') NOT NULL DEFAULT 'user' AFTER email_verified,
-    ADD COLUMN status ENUM('active', 'suspended') NOT NULL DEFAULT 'active' AFTER role,
+    ADD COLUMN status ENUM('active', 'inactive', 'suspended', 'deleted') NOT NULL DEFAULT 'active' AFTER role,
     ADD COLUMN phone VARCHAR(30) NULL AFTER status,
     ADD COLUMN photo_path VARCHAR(255) NULL AFTER phone,
     ADD COLUMN monthly_income_estimate DECIMAL(10,2) NOT NULL DEFAULT 0 AFTER photo_path,
@@ -343,4 +343,39 @@ FROM (
 ) AS defaults
 WHERE NOT EXISTS (
     SELECT 1 FROM Categories c WHERE c.category_name = defaults.category_name
+);
+CREATE TABLE IF NOT EXISTS Wallets (
+    wallet_id INT PRIMARY KEY AUTO_INCREMENT,
+    user_id INT NOT NULL,
+    payment_method_id INT NOT NULL UNIQUE,
+    name VARCHAR(100) NOT NULL,
+    kind ENUM('bank', 'digital', 'cash', 'other') NOT NULL,
+    balance DECIMAL(10,2) NOT NULL DEFAULT 0,
+    is_default TINYINT(1) NOT NULL DEFAULT 0,
+    deleted_at DATETIME NULL,
+    FOREIGN KEY (user_id) REFERENCES Users(user_id),
+    FOREIGN KEY (payment_method_id) REFERENCES Payment_Methods(payment_method_id)
+);
+CREATE TABLE IF NOT EXISTS Wallet_Transfers (
+ transfer_id INT PRIMARY KEY AUTO_INCREMENT,
+ user_id INT NOT NULL,
+ from_wallet_id INT NOT NULL,
+ to_wallet_id INT NOT NULL,
+ amount DECIMAL(10,2) NOT NULL,
+ created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ FOREIGN KEY (user_id) REFERENCES Users(user_id),
+ FOREIGN KEY (from_wallet_id) REFERENCES Wallets(wallet_id),
+ FOREIGN KEY (to_wallet_id) REFERENCES Wallets(wallet_id)
+);
+CREATE TABLE IF NOT EXISTS Wallet_Adjustments (
+ adjustment_id INT PRIMARY KEY AUTO_INCREMENT,
+ user_id INT NOT NULL,
+ wallet_id INT NOT NULL,
+ previous_balance DECIMAL(14,2) NOT NULL,
+ new_balance DECIMAL(14,2) NOT NULL,
+ amount DECIMAL(14,2) NOT NULL,
+ reason VARCHAR(200) NOT NULL,
+ created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ FOREIGN KEY (user_id) REFERENCES Users(user_id),
+ FOREIGN KEY (wallet_id) REFERENCES Wallets(wallet_id)
 );

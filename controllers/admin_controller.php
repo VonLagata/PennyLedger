@@ -21,15 +21,17 @@ if ($adminAction === 'users') {
         // The admin table needs search, status filtering, and bounded pages.
         $search = '%' . trim($_GET['q'] ?? '') . '%';
         $status = $_GET['status'] ?? '';
-        if ($status !== '') require_enum($status, 'status', ['active', 'suspended']);
+        if ($status !== '') require_enum($status, 'status', ['active', 'inactive', 'suspended', 'deleted']);
         $page = max(1, (int) ($_GET['page'] ?? 1));
         $perPage = min(100, max(1, (int) ($_GET['per_page'] ?? 20)));
         $offset = ($page - 1) * $perPage;
 
-        $where = "WHERE role = 'user' AND deleted_at IS NULL AND (first_name LIKE ? OR last_name LIKE ? OR email LIKE ?)";
+        $isArchive = $status === 'deleted';
+        $deletedFilter = $isArchive ? 'deleted_at IS NOT NULL' : 'deleted_at IS NULL';
+        $where = "WHERE role = 'user' AND {$deletedFilter} AND (first_name LIKE ? OR last_name LIKE ? OR email LIKE ?)";
         $types = 'sss';
         $params = [$search, $search, $search];
-        if ($status !== '') {
+        if ($status !== '' && !$isArchive) {
             $where .= ' AND status = ?';
             $types .= 's';
             $params[] = $status;
@@ -41,7 +43,8 @@ if ($adminAction === 'users') {
 
         $query = mysqli_prepare($conn, "
             SELECT user_id AS id, first_name AS firstName, last_name AS lastName, email,
-                   role, status, created_at AS createdAt, last_login_at AS lastLoginAt
+                   role, status, created_at AS createdAt, last_login_at AS lastLoginAt,
+                   deleted_at AS deletedAt
             FROM Users {$where} ORDER BY created_at DESC LIMIT ? OFFSET ?
         ");
         $queryTypes = $types . 'ii';
@@ -84,6 +87,7 @@ if ($adminAction === 'users') {
     }
 
     if ($method === 'PUT' && $targetId) {
+        send_error('Administrator editing of user identity is disabled', 405);
         $input = get_json_input();
         require_fields($input, ['first_name', 'last_name', 'email']);
         $firstName = require_string($input['first_name'], 'first_name', 100);
@@ -115,21 +119,43 @@ if ($adminAction === 'users') {
 
     if ($method === 'PATCH' && $targetId && $adminSubaction === 'status') {
         // Changing status is separate from editing identity. Revoking tokens
-        // immediately signs out a newly suspended user.
+        // immediately signs out any user whose access is disabled.
         $input = get_json_input();
         require_fields($input, ['status']);
-        $status = require_enum($input['status'], 'status', ['active', 'suspended']);
+        $status = require_enum($input['status'], 'status', ['active', 'inactive', 'suspended']);
         $stmt = mysqli_prepare($conn, "UPDATE Users SET status = ? WHERE user_id = ? AND role = 'user' AND deleted_at IS NULL");
         mysqli_stmt_bind_param($stmt, 'si', $status, $targetId);
         mysqli_stmt_execute($stmt);
         if (mysqli_stmt_affected_rows($stmt) === 0) send_error('User not found or already in that state', 404);
-        if ($status === 'suspended') {
+        if ($status !== 'active') {
             $tokens = mysqli_prepare($conn, 'DELETE FROM Tokens WHERE user_id = ?');
             mysqli_stmt_bind_param($tokens, 'i', $targetId);
             mysqli_stmt_execute($tokens);
         }
         log_activity($conn, $adminId, 'user_status_changed', "Changed user {$targetId} status to {$status}");
         send_success(['id' => $targetId, 'status' => $status], 'Account status updated');
+    }
+
+    if ($method === 'PATCH' && $targetId && $adminSubaction === 'delete') {
+        $stmt = mysqli_prepare($conn, "UPDATE Users SET status = 'deleted', deleted_at = NOW() WHERE user_id = ? AND role = 'user' AND deleted_at IS NULL");
+        mysqli_stmt_bind_param($stmt, 'i', $targetId);
+        mysqli_stmt_execute($stmt);
+        if (mysqli_stmt_affected_rows($stmt) === 0) send_error('User not found or already deleted', 404);
+
+        $tokens = mysqli_prepare($conn, 'DELETE FROM Tokens WHERE user_id = ?');
+        mysqli_stmt_bind_param($tokens, 'i', $targetId);
+        mysqli_stmt_execute($tokens);
+        log_activity($conn, $adminId, 'user_status_changed', "Moved user {$targetId} to deleted accounts archive");
+        send_success(['id' => $targetId, 'status' => 'deleted'], 'Account moved to archive');
+    }
+
+    if ($method === 'PATCH' && $targetId && $adminSubaction === 'restore') {
+        $stmt = mysqli_prepare($conn, "UPDATE Users SET status = 'active', deleted_at = NULL WHERE user_id = ? AND role = 'user' AND deleted_at IS NOT NULL");
+        mysqli_stmt_bind_param($stmt, 'i', $targetId);
+        mysqli_stmt_execute($stmt);
+        if (mysqli_stmt_affected_rows($stmt) === 0) send_error('Archived user not found', 404);
+        log_activity($conn, $adminId, 'user_status_changed', "Restored user {$targetId} from deleted accounts archive");
+        send_success(['id' => $targetId, 'status' => 'active'], 'Account restored');
     }
 }
 

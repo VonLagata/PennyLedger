@@ -18,13 +18,14 @@ const titles = {
   "/admin": "Admin Overview",
   "/admin/login": "Admin Sign In",
   "/admin/users": "Manage Users",
+  "/admin/archive": "Deleted Accounts",
   "/admin/activity": "Activity Log",
   "/admin/settings": "Admin Settings",
   "/": "Take control of your money",
   "/login": "Log In",
   "/signup": "Create Account",
   "/dashboard": "Dashboard",
-  "/transactions": "Transactions",
+  "/transactions": "Transaction history",
   "/budget": "Budget",
   "/goals": "Financial Goals",
   "/reports": "Reports",
@@ -58,6 +59,7 @@ function AppRoutes() {
           <Route element={<Layout admin />}>
             <Route path="/admin" element={<Admin />} />
             <Route path="/admin/users" element={<Admin section="users" />} />
+            <Route path="/admin/archive" element={<Admin section="archive" />} />
             <Route
               path="/admin/activity"
               element={<Admin section="activity" />}

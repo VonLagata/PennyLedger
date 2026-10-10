@@ -12,7 +12,7 @@ function readPreference(key, fallback) {
 }
 
 const emptyLedger = {
-  transactions: [], budgets: [], goals: [], reports: [], income: 0,
+  transactions: [], budgets: [], wallets: [], goals: [], reports: [], income: 0,
   profile: { name: "", email: "", phone: "", photo: null },
 };
 
@@ -38,10 +38,10 @@ export function AppProvider({ children }) {
     // AppContext. Data comes from authenticated API routes, never user_id URLs.
     Promise.all([
       api("/transactions"), api("/budgets"), api("/goals"),
-      api("/report-logs"), api("/profile"),
-    ]).then(([transactions, budgets, goals, reports, profile]) => {
+      api("/report-logs"), api("/profile"), api("/wallets"),
+    ]).then(([transactions, budgets, goals, reports, profile, wallets]) => {
       if (!active) return;
-      setData({ transactions, budgets, goals, reports,
+      setData({ transactions, budgets, goals, reports, wallets,
         income: profile.monthlyIncomeEstimate || 0,
         profile: { ...profile, photo: assetUrl(profile.photoUrl) } });
     }).catch((failure) => { if (active) setError(failure.message); })
@@ -77,7 +77,7 @@ export function AppProvider({ children }) {
     // PHP validates and creates the record. Use its numeric ID and saved data.
     const saved = await api("/transactions", { method: "POST", body: values });
     setData((old) => ({ ...old, transactions: [saved, ...old.transactions] }));
-    await refreshBudgets();
+    await Promise.all([refreshBudgets(), refreshWallets()]).catch(() => notify('Transaction saved. Refresh the page to update totals.'));
     return saved;
   }
 
@@ -99,6 +99,33 @@ export function AppProvider({ children }) {
     const saved = await api("/budgets", { method: "POST", body: values });
     setData((old) => ({ ...old, budgets: [saved, ...old.budgets] }));
     return saved;
+  }
+
+  async function createWallet(values) {
+    const saved = await api('/wallets', { method: 'POST', body: values });
+    setData((old) => ({ ...old, wallets: [...old.wallets, saved] }));
+    return saved;
+  }
+
+  async function refreshWallets() {
+    const wallets = await api('/wallets');
+    setData((old) => ({ ...old, wallets }));
+  }
+
+  async function transferWallet(values) {
+    await api('/wallet-transfers', { method: 'POST', body: values });
+    await refreshWallets().catch(() => notify('Transfer saved. Refresh the page to update balances.'));
+  }
+
+  async function updateWallet(id, values) {
+    const saved = await api(`/wallets/${id}`, { method: 'PUT', body: values });
+    setData((old) => ({ ...old, wallets: old.wallets.map((wallet) => wallet.id === id ? saved : wallet) }));
+    return saved;
+  }
+
+  async function deleteWallet(id, password) {
+    await api(`/wallets/${id}`, { method: 'DELETE', body: { password } });
+    setData((old) => ({ ...old, wallets: old.wallets.filter((wallet) => wallet.id !== id) }));
   }
 
   async function saveGoal(values, id = null) {
@@ -141,7 +168,7 @@ export function AppProvider({ children }) {
 
   return <AppContext.Provider value={{
     ...data, loading, error, notify,
-    createTransaction, archiveTransaction, createBudget, saveGoal,
+    createTransaction, archiveTransaction, createBudget, createWallet, updateWallet, deleteWallet, transferWallet, saveGoal,
     addGoalContribution, addReport, archiveReport, updateProfile, saveIncomeEstimate,
     theme, currency, dateFormat,
     setTheme: (value) => preference("theme", value, setThemeState),

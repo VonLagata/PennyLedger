@@ -60,13 +60,32 @@ if ($method === 'GET') {
 if ($method === 'POST' || $method === 'PUT') {
     if ($method === 'PUT' && !$id) send_error('Budget ID required', 400);
     $input = get_json_input();
-    require_fields($input, ['category_id', 'budget_amount', 'budget_period', 'start_date', 'end_date']);
-    $categoryId = (int) $input['category_id'];
+    require_fields($input, ['budget_amount', 'budget_period', 'start_date', 'end_date']);
+    $categoryId = (int) ($input['category_id'] ?? 0);
     $amount = require_positive_number($input['budget_amount'], 'budget_amount');
     $period = require_enum($input['budget_period'], 'budget_period', ['daily', 'weekly', 'monthly']);
     $startDate = require_date($input['start_date'], 'start_date');
     $endDate = require_date($input['end_date'], 'end_date');
     if ($startDate > $endDate) send_error('Validation failed', 422, ['end_date' => 'Must be on or after start_date']);
+
+    if (isset($input['category_name'])) {
+        $categoryName = require_string($input['category_name'], 'category_name', 100);
+        $type = mysqli_fetch_assoc(mysqli_query($conn, "SELECT transaction_type_id FROM TransactionTypes WHERE code = 'expense' LIMIT 1"));
+        if (!$type) send_error('Expense type is not configured', 422);
+        $typeId = (int) $type['transaction_type_id'];
+        $find = mysqli_prepare($conn, 'SELECT category_id FROM Categories WHERE category_name = ? AND transaction_type_id = ? LIMIT 1');
+        mysqli_stmt_bind_param($find, 'si', $categoryName, $typeId);
+        mysqli_stmt_execute($find);
+        $existing = mysqli_fetch_assoc(mysqli_stmt_get_result($find));
+        if ($existing) {
+            $categoryId = (int) $existing['category_id'];
+        } else {
+            $insert = mysqli_prepare($conn, 'INSERT INTO Categories (category_name, transaction_type_id) VALUES (?, ?)');
+            mysqli_stmt_bind_param($insert, 'si', $categoryName, $typeId);
+            mysqli_stmt_execute($insert);
+            $categoryId = mysqli_insert_id($conn);
+        }
+    }
 
     $category = mysqli_prepare($conn, "
         SELECT c.category_id FROM Categories c

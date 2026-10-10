@@ -26,12 +26,13 @@ export default function Layout({ admin = false }) {
     ? [
         ["admin", "Overview"],
         ["admin/users", "Users"],
+        ["admin/archive", "Deleted Accounts"],
         ["admin/activity", "Activity Log"],
         ["admin/settings", "Admin Settings"],
       ]
     : [
         ["dashboard", "Dashboard"],
-        ["transactions", "Transactions"],
+        ["transactions", "Transaction history"],
         ["budget", "Budget"],
         ["goals", "Financial Goals"],
         ["reports", "Reports"],
@@ -45,7 +46,7 @@ export default function Layout({ admin = false }) {
         <nav className="side-nav" aria-label="Main navigation">
           {links.map(([path, label]) => (
             <NavLink key={path} to={`/${path}`} end={path === "admin"}>
-              <Icon name={admin ? "settings" : path} />
+              <Icon name={admin ? (path === "admin/archive" ? "archive" : "settings") : path} />
               {label}
             </NavLink>
           ))}
@@ -53,7 +54,9 @@ export default function Layout({ admin = false }) {
         <div className="sidebar-spacer" />
         <div className="side-profile">
           <div className="avatar">
-            {(admin ? account.name : profile.name)
+            {!admin && profile.photo ? (
+              <img className="profile-photo" src={profile.photo} alt="Your profile" />
+            ) : (admin ? account.name : profile.name)
               .split(" ")
               .map((word) => word[0])
               .slice(0, 2)

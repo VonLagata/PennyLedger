@@ -43,7 +43,10 @@ export function createReport(type, range, transactions, budgets, goals) {
   return {
     type, range, period, income, expense, series,
     name: reportTypes.find((item) => item.id === type)?.name || "Report",
-    categories, budgets: budgets.map((item) => ({ ...item })), goals: goals.map((item) => ({ ...item })),
+    categories, budgets: budgets.filter((item) => {
+      const prefix = range === 'this-year' ? String(new Date().getFullYear()) : range;
+      return item.startDate?.startsWith(prefix) || item.endDate?.startsWith(prefix);
+    }).map((item) => ({ ...item, spent: selected.filter((tx) => tx.amount < 0 && tx.categoryId === item.categoryId && tx.date >= item.startDate && tx.date <= item.endDate).reduce((sum, tx) => sum - tx.amount, 0) })), goals: goals.map((item) => ({ ...item })),
   };
 }
 

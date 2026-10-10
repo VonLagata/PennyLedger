@@ -1,10 +1,13 @@
 import { useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import { ThemeSwitch } from "../components/UI";
+import { useAuth } from "../state/AuthContext";
 import logoBlack from "../assets/logo-black.svg";
 import logoWhite from "../assets/logo-white.svg";
 
 export default function Home() {
+  const { account } = useAuth();
+  const logoDestination = account ? account.role === "admin" ? "/admin" : "/dashboard" : "/";
   const root = useRef(null);
   useEffect(() => {
     const targets = root.current.querySelectorAll(
@@ -33,7 +36,7 @@ export default function Home() {
   return (
     <div ref={root}>
       <header className="site-header">
-        <Link className="logo" to="/">
+        <Link className="logo" to={logoDestination}>
           <img
             className="logo-img logo-light"
             src={logoBlack}
@@ -215,7 +218,7 @@ export default function Home() {
       <footer className="site-footer">
         <div className="footer-top">
           <div className="footer-brand">
-            <Link className="logo" to="/">
+            <Link className="logo" to={logoDestination}>
               <img
                 className="logo-img logo-light"
                 src={logoBlack}

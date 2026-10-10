@@ -2,12 +2,14 @@
 import { Link } from "react-router-dom";
 import { useAuth } from "../state/AuthContext";
 import { useApp } from "../state/AppContext";
+import { DATE_FORMATS, formatDate, localDate } from "../lib/format";
 import {
   Field,
   FormActions,
   Modal,
   PageTitle,
   Summary,
+  ThemeSwitch,
 } from "../components/UI";
 
 function UserEditor({ user, onClose }) {
@@ -75,6 +77,13 @@ function UserEditor({ user, onClose }) {
     </Modal>
   );
 }
+function AdminDate({ value, withTime = false }) {
+  const { dateFormat } = useApp();
+  const parsed = new Date(value);
+  if (!value || Number.isNaN(parsed.getTime())) return "—";
+  return <>{formatDate(localDate(parsed), dateFormat)}{withTime ? `, ${parsed.toLocaleTimeString()}` : ""}</>;
+}
+
 function ActivityTable({ entries }) {
   return (
     <div className="table-scroll">
@@ -90,7 +99,7 @@ function ActivityTable({ entries }) {
         <tbody>
           {entries.map((entry) => (
             <tr key={entry.id}>
-              <td>{new Date(entry.at).toLocaleString()}</td>
+              <td><AdminDate value={entry.at} withTime /></td>
               <td>{entry.action}</td>
               <td>{entry.subject}</td>
               <td>{entry.actor}</td>
@@ -106,22 +115,45 @@ function ActivityTable({ entries }) {
     </div>
   );
 }
+
+function statusPill(status) {
+  const normalized = ["active", "inactive", "suspended", "deleted"].includes(status)
+    ? status
+    : "unknown";
+  const tone = {
+    active: "pill-green",
+    inactive: "pill-gray",
+    suspended: "pill-red",
+    deleted: "pill-gray",
+  }[normalized] || "pill-gray";
+  const label = normalized[0].toUpperCase() + normalized.slice(1);
+  return <span className={`pill ${tone}`}>{label}</span>;
+}
+
 export default function Admin({ section = "overview" }) {
   const {
     users,
     activity,
     updateUser,
+    deleteUser,
+    restoreUser,
+    refreshAdmin,
+    adminLoading,
+    adminError,
     registrationOpen,
     setRegistrationOpen,
     account,
   } = useAuth();
-  const { notify } = useApp();
+  const { notify, dateFormat, setDateFormat } = useApp();
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("all");
   const [editing, setEditing] = useState(null);
   const [confirm, setConfirm] = useState(null);
+  const [statusSaving, setStatusSaving] = useState(null);
   const members = users.filter((user) => user.role === "user");
-  const visible = members.filter(
+  const liveMembers = members.filter((user) => !user.deletedAt && user.status !== "deleted");
+  const archivedMembers = members.filter((user) => user.deletedAt || user.status === "deleted");
+  const visible = liveMembers.filter(
     (user) =>
       (status === "all" || user.status === status) &&
       `${user.name} ${user.email}`
@@ -131,6 +163,7 @@ export default function Admin({ section = "overview" }) {
   const titles = {
     overview: "Admin Overview",
     users: "Manage Users",
+    archive: "Deleted Accounts",
     activity: "Activity Log",
     settings: "Admin Settings",
   };
@@ -141,22 +174,40 @@ export default function Admin({ section = "overview" }) {
         description="PennyLedger administration"
       >
         <span className="pill pill-blue">Administrator</span>
+        <button
+          className="btn btn-outline btn-sm"
+          disabled={adminLoading}
+          onClick={() => refreshAdmin()}
+        >
+          {adminLoading ? "Refreshing…" : "Refresh data"}
+        </button>
       </PageTitle>
+      {adminError && (
+        <p className="admin-load-error" role="alert">
+          Some admin data did not load: {adminError}
+        </p>
+      )}
       {section === "overview" && (
         <>
           <Summary
             items={[
-              { label: "Total Users", value: members.length },
+              { label: "Total Users", value: adminLoading && !users.length ? "…" : members.length },
               {
                 label: "Active Users",
-                value: members.filter((user) => user.status === "active")
-                  .length,
+                value: adminLoading && !users.length ? "…" : liveMembers.filter((user) => user.status === "active").length,
                 tone: "green",
               },
               {
+                label: "Inactive Users",
+                value: adminLoading && !users.length ? "…" : liveMembers.filter((user) => user.status === "inactive").length,
+              },
+              {
                 label: "Suspended Users",
-                value: members.filter((user) => user.status === "suspended")
-                  .length,
+                value: adminLoading && !users.length ? "…" : liveMembers.filter((user) => user.status === "suspended").length,
+              },
+              {
+                label: "Deleted Accounts",
+                value: adminLoading && !users.length ? "…" : archivedMembers.length,
               },
             ]}
           />
@@ -168,9 +219,8 @@ export default function Admin({ section = "overview" }) {
               </Link>
             </div>
             <p className="report-caption">
-              Welcome, {account.name}. Create user accounts, update contact
-              details, reset passwords, and suspend or restore access. Each user
-              has a separate personal ledger.
+              Welcome, {account.name}. Create accounts, set account status, and
+              review deleted accounts. Each user has a separate personal ledger.
             </p>
             <span
               className={`pill ${registrationOpen ? "pill-green" : "pill-red"}`}
@@ -206,10 +256,14 @@ export default function Admin({ section = "overview" }) {
               value={status}
               onChange={(event) => setStatus(event.target.value)}
             >
-              <option value="all">All statuses</option>
+              <option value="all">All current accounts</option>
               <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
               <option value="suspended">Suspended</option>
             </select>
+            <Link className="btn btn-outline btn-sm" to="/admin/archive">
+              Deleted Accounts ({archivedMembers.length})
+            </Link>
             <button
               className="btn btn-primary btn-sm"
               onClick={() => setEditing({})}
@@ -218,8 +272,8 @@ export default function Admin({ section = "overview" }) {
             </button>
           </div>
           <p className="report-caption">
-            {visible.length} of {members.length} users · Administrator accounts
-            cannot be modified here.
+            {visible.length} of {liveMembers.length} current accounts ·
+            Administrator accounts cannot be modified here.
           </p>
           <div className="table-scroll">
             <table className="admin-table">
@@ -240,34 +294,49 @@ export default function Admin({ section = "overview" }) {
                       <span className="admin-email">{user.email}</span>
                     </td>
                     <td>
-                      <span
-                        className={`pill ${user.status === "active" ? "pill-green" : "pill-red"}`}
-                      >
-                        {user.status}
-                      </span>
+                      {statusPill(user.status)}
                     </td>
-                    <td>{new Date(user.created).toLocaleDateString()}</td>
+                    <td><AdminDate value={user.created} /></td>
                     <td>
                       {user.lastLogin
-                        ? new Date(user.lastLogin).toLocaleString()
+                        ? <AdminDate value={user.lastLogin} withTime />
                         : "Never"}
                     </td>
                     <td>
                       <div className="admin-actions">
                         <button
-                          className="btn btn-outline btn-sm"
-                          aria-label={`Edit ${user.name}`}
-                          onClick={() => setEditing(user)}
+                          className="btn btn-danger btn-sm"
+                          aria-label={`Delete ${user.name}`}
+                          onClick={() => setConfirm({ user, action: "delete" })}
                         >
-                          Edit
+                          Delete
                         </button>
-                        <button
-                          className="btn btn-outline btn-sm"
-                          aria-label={`${user.status === "active" ? "Suspend" : "Restore"} ${user.name}`}
-                          onClick={() => setConfirm(user)}
-                        >
-                          {user.status === "active" ? "Suspend" : "Restore"}
-                        </button>
+                        {["active", "inactive", "suspended"].includes(user.status) ? (
+                          <select
+                            className="filter-select admin-status-select"
+                            aria-label={`Change ${user.name} status`}
+                            value={user.status}
+                            disabled={statusSaving === user.id}
+                            onChange={async (event) => {
+                              const nextStatus = event.target.value;
+                              setStatusSaving(user.id);
+                              try {
+                                await updateUser(user.id, { status: nextStatus });
+                                notify(`Account status changed to ${nextStatus}`);
+                              } catch (error) {
+                                notify(error.message);
+                              } finally {
+                                setStatusSaving(null);
+                              }
+                            }}
+                          >
+                            <option value="active">Active</option>
+                            <option value="inactive">Inactive</option>
+                            <option value="suspended">Suspended</option>
+                          </select>
+                        ) : (
+                          <span className="report-caption">Status unavailable</span>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -277,6 +346,77 @@ export default function Admin({ section = "overview" }) {
                     <td colSpan={5}>No users match your filters.</td>
                   </tr>
                 )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+      {section === "archive" && (
+        <section className="card">
+          <div className="card-head">
+            <div>
+              <h2>Deleted Accounts</h2>
+          <p className="report-caption">
+            Deleted accounts are kept here with their ledger data. Restore an
+            account to allow sign-in again.
+          </p>
+            </div>
+            <Link className="btn btn-outline btn-sm" to="/admin/users">Back to Users</Link>
+          </div>
+          <div className="search-box admin-archive-search">
+            <input
+              aria-label="Search deleted accounts"
+              placeholder="Search name or email"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+            />
+          </div>
+          <p className="report-caption">
+            {archivedMembers.filter((user) =>
+              `${user.name} ${user.email}`.toLowerCase().includes(search.trim().toLowerCase()),
+            ).length} archived accounts
+          </p>
+          <div className="table-scroll">
+            <table className="admin-table">
+              <thead>
+                <tr>
+                  <th>User</th>
+                  <th>Status</th>
+                  <th>Deleted</th>
+                  <th>Joined</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {archivedMembers
+                  .filter((user) =>
+                    `${user.name} ${user.email}`.toLowerCase().includes(search.trim().toLowerCase()),
+                  )
+                  .map((user) => (
+                    <tr key={user.id}>
+                      <td>
+                        <strong>{user.name}</strong>
+                        <span className="admin-email">{user.email}</span>
+                      </td>
+                      <td>{statusPill("deleted")}</td>
+                      <td><AdminDate value={user.deletedAt} withTime /></td>
+                      <td><AdminDate value={user.created} /></td>
+                      <td>
+                        <button
+                          className="btn btn-outline btn-sm"
+                          onClick={() => setConfirm({ user, action: "restore" })}
+                        >
+                          Restore
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                {!archivedMembers.length && (
+                  <tr><td colSpan={5}>No deleted accounts in the archive.</td></tr>
+                )}
+                {!!archivedMembers.length && !archivedMembers.some((user) =>
+                  `${user.name} ${user.email}`.toLowerCase().includes(search.trim().toLowerCase()),
+                ) && <tr><td colSpan={5}>No accounts match your search.</td></tr>}
               </tbody>
             </table>
           </div>
@@ -292,6 +432,26 @@ export default function Admin({ section = "overview" }) {
         </section>
       )}
       {section === "settings" && (
+        <div className="settings-grid">
+        <section className="card settings-card">
+          <div className="card-head">
+            <h2>Appearance</h2>
+            <p>Choose how PennyLedger looks on your screen.</p>
+          </div>
+          <div className="settings-row">
+            <div className="sr-text"><strong>Dark mode</strong><span>Switch between light and dark themes</span></div>
+            <div className="sr-control"><ThemeSwitch /></div>
+          </div>
+          <div className="settings-row">
+            <div className="sr-text"><strong>Date format</strong><span>How dates are displayed throughout the admin pages</span></div>
+            <div className="sr-control">
+              <select aria-label="Date format" className="filter-select" value={dateFormat}
+                onChange={(event) => { setDateFormat(event.target.value); notify("Date format changed"); }}>
+                {DATE_FORMATS.map((value) => <option key={value} value={value}>{formatDate(localDate(), value)}</option>)}
+              </select>
+            </div>
+          </div>
+        </section>
         <section className="card settings-card">
           <div className="card-head">
             <h2>Registration</h2>
@@ -319,6 +479,7 @@ export default function Admin({ section = "overview" }) {
             Account records, roles, and activity are managed by the PennyLedger server.
           </p>
         </section>
+        </div>
       )}
       {editing && (
         <UserEditor
@@ -328,14 +489,16 @@ export default function Admin({ section = "overview" }) {
       )}
       {confirm && (
         <Modal
-          title={`${confirm.status === "active" ? "Suspend" : "Restore"} user?`}
+          title={confirm.action === "delete"
+            ? "Move account to archive?"
+            : "Restore account?"}
           onClose={() => setConfirm(null)}
         >
           <p className="report-caption">
-            {confirm.name} will{" "}
-            {confirm.status === "active"
-              ? "lose access until restored. Their ledger will be preserved."
-              : "be able to sign in again."}
+            {confirm.user.name} will{" "}
+            {confirm.action === "delete"
+              ? "be marked Deleted and moved to the archive. Their ledger data will be preserved."
+              : "be marked Active and can sign in again."}
           </p>
           <div className="modal-actions">
             <button
@@ -348,11 +511,14 @@ export default function Admin({ section = "overview" }) {
               className="btn btn-primary"
               onClick={async () => {
                 try {
-                  await updateUser(confirm.id, {
-                    status:
-                      confirm.status === "active" ? "suspended" : "active",
-                  });
-                  notify("Account status updated");
+                  if (confirm.action === "delete") {
+                    await deleteUser(confirm.user.id);
+                  } else {
+                    await restoreUser(confirm.user.id);
+                  }
+                  notify(confirm.action === "delete"
+                    ? "Account moved to archive"
+                    : "Account restored");
                   setConfirm(null);
                 } catch (error) {
                   notify(error.message);

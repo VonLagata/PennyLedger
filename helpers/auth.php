@@ -45,6 +45,18 @@ function require_auth(mysqli $conn): array
         send_error('Invalid or expired session', 401);
     }
 
+    // Serialize account writes across transfers, reconciliation, and expenses.
+    if (in_array($_SERVER['REQUEST_METHOD'] ?? 'GET', ['POST', 'PUT', 'PATCH', 'DELETE'], true) && empty($GLOBALS['account_write_lock'])) {
+        $lockName = 'pennyledger-user-' . $user['user_id'];
+        $lock = mysqli_prepare($conn, 'SELECT GET_LOCK(?, 10) AS acquired');
+        mysqli_stmt_bind_param($lock, 's', $lockName); mysqli_stmt_execute($lock);
+        if ((int) mysqli_fetch_assoc(mysqli_stmt_get_result($lock))['acquired'] !== 1) send_error('Account is busy; retry shortly', 409);
+        $GLOBALS['account_write_lock'] = $lockName;
+        register_shutdown_function(function () use ($conn, $lockName) {
+            $release = mysqli_prepare($conn, 'SELECT RELEASE_LOCK(?)');
+            mysqli_stmt_bind_param($release, 's', $lockName); mysqli_stmt_execute($release);
+        });
+    }
     return $user;
 }
 

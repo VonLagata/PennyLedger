@@ -3,6 +3,7 @@
 const baseUrl = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
 
 const TOKEN_KEY = "penny_api_token";
+const pendingWrites = new Map();
 
 export function getToken() {
   return sessionStorage.getItem(TOKEN_KEY);
@@ -26,6 +27,11 @@ export function assetUrl(path) {
 
 export async function api(path, { method = "GET", body, token = getToken(), signal } = {}) {
   const headers = {};
+  const signature = method === 'POST' && !(body instanceof FormData) ? JSON.stringify([path, body, token]) : null;
+  if (signature) {
+    if (!pendingWrites.has(signature)) pendingWrites.set(signature, crypto.randomUUID());
+    headers['Idempotency-Key'] = pendingWrites.get(signature);
+  }
   if (token) headers.Authorization = `Bearer ${token}`;
   if (body !== undefined && !(body instanceof FormData)) {
     headers["Content-Type"] = "application/json";
@@ -42,10 +48,12 @@ export async function api(path, { method = "GET", body, token = getToken(), sign
   // any page updates its state or shows a success message.
   const result = await response.json().catch(() => null);
   if (!response.ok || result?.status !== "success") {
+    if (signature && response.status < 500 && response.status !== 409) pendingWrites.delete(signature);
     const error = new Error(result?.message || `Request failed (${response.status})`);
     error.status = response.status;
     error.fields = result?.errors || {};
     throw error;
   }
+  if (signature) pendingWrites.delete(signature);
   return result.data;
 }

@@ -12,6 +12,8 @@ require_once __DIR__ . '/../config/mail.php';
 
 function send_email(string $to, string $subject, string $body, ?string $plainText = null): bool
 {
+    $plain = $plainText ?? strip_tags($body);
+
     if (MAIL_USERNAME === '' || MAIL_PASSWORD === '') {
         error_log('Mail environment variables are not configured');
         return false;
@@ -34,11 +36,11 @@ function send_email(string $to, string $subject, string $body, ?string $plainTex
         $mail->Body = $body;
         // OTP emails supply a readable plain-text version; older callers keep
         // the previous fallback without needing to change their call sites.
-        $mail->AltBody = $plainText ?? strip_tags($body);
+        $mail->AltBody = $plain;
         $mail->send();
         return true;
     } catch (Throwable $exception) {
-        error_log($exception->getMessage());
+        error_log('Mailer error: ' . $exception->getMessage());
         return false;
     }
 }

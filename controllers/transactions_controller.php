@@ -111,16 +111,40 @@ if ($method === 'POST' || $method === 'PUT') {
     if ($method === 'PUT' && !$id) send_error('Transaction ID required', 400);
     $input = get_json_input();
     require_fields($input, [
-        'category_id', 'transaction_type_id', 'amount', 'description',
+        'transaction_type_id', 'amount', 'description',
         'transaction_date', 'payment_method_id',
     ]);
 
-    $categoryId = (int) $input['category_id'];
+    $categoryId = (int) ($input['category_id'] ?? 0);
     $typeId = (int) $input['transaction_type_id'];
     $paymentMethodId = (int) $input['payment_method_id'];
+    $owner = mysqli_prepare($conn, 'SELECT wallet_id FROM Wallets WHERE payment_method_id = ? AND (user_id <> ? OR deleted_at IS NOT NULL)');
+    mysqli_stmt_bind_param($owner, 'ii', $paymentMethodId, $userId);
+    mysqli_stmt_execute($owner);
+    if (mysqli_fetch_assoc(mysqli_stmt_get_result($owner))) send_error('Payment method is invalid', 422);
     $amount = require_positive_number($input['amount'], 'amount');
     $description = require_string($input['description'], 'description', 150);
     $transactionDate = require_date($input['transaction_date'], 'transaction_date');
+
+    if (isset($input['category_name'])) {
+        $categoryName = require_string($input['category_name'], 'category_name', 100);
+        $valid = mysqli_prepare($conn, 'SELECT transaction_type_id FROM TransactionTypes WHERE transaction_type_id = ? AND EXISTS (SELECT 1 FROM Payment_Methods WHERE payment_method_id = ?)');
+        mysqli_stmt_bind_param($valid, 'ii', $typeId, $paymentMethodId);
+        mysqli_stmt_execute($valid);
+        if (!mysqli_fetch_assoc(mysqli_stmt_get_result($valid))) send_error('Type or payment method is invalid', 422);
+        $category = mysqli_prepare($conn, 'SELECT category_id FROM Categories WHERE category_name = ? AND transaction_type_id = ? LIMIT 1');
+        mysqli_stmt_bind_param($category, 'si', $categoryName, $typeId);
+        mysqli_stmt_execute($category);
+        $existing = mysqli_fetch_assoc(mysqli_stmt_get_result($category));
+        if ($existing) {
+            $categoryId = (int) $existing['category_id'];
+        } else {
+            $category = mysqli_prepare($conn, 'INSERT INTO Categories (category_name, transaction_type_id) VALUES (?, ?)');
+            mysqli_stmt_bind_param($category, 'si', $categoryName, $typeId);
+            mysqli_stmt_execute($category);
+            $categoryId = mysqli_insert_id($conn);
+        }
+    }
 
     // Confirm the category belongs to the selected transaction type and the
     // payment method exists before inserting a financial record.

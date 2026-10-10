@@ -16,6 +16,8 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
   const [users, setUsers] = useState([]);
   const [activity, setActivity] = useState([]);
+  const [adminLoading, setAdminLoading] = useState(false);
+  const [adminError, setAdminError] = useState("");
   const [registrationOpen, setRegistrationOpenState] = useState(true);
 
   useEffect(() => {
@@ -31,7 +33,13 @@ export function AuthProvider({ children }) {
   }, []);
 
   useEffect(() => {
-    if (account?.role !== "admin") { setUsers([]); setActivity([]); return; }
+    if (account?.role !== "admin") {
+      setUsers([]);
+      setActivity([]);
+      setAdminError("");
+      setAdminLoading(false);
+      return;
+    }
     refreshAdmin().catch(console.error);
   }, [account?.id, account?.role]);
 
@@ -51,7 +59,9 @@ export function AuthProvider({ children }) {
   async function register(values) {
     return api("/auth/register", {
       method: "POST",
-      body: { ...splitName(values.name), email: values.email, password: values.password },
+      body: { ...(values.firstName !== undefined
+        ? { first_name: values.firstName, last_name: values.lastName }
+        : splitName(values.name)), email: values.email, password: values.password },
       token: null,
     });
   }
@@ -70,29 +80,57 @@ export function AuthProvider({ children }) {
     finally { setToken(null); setAccount(null); }
   }
 
-  async function updateIdentity(name, email, phone = "") {
+  async function updateIdentity(firstName, lastName, email, phone = "") {
     const revised = await api("/profile", {
-      method: "PUT", body: { ...splitName(name), email, phone },
+      method: "PUT", body: { first_name: firstName, last_name: lastName, email, phone },
     });
     setAccount(revised);
     return revised;
   }
 
   async function refreshAdmin() {
-    const [firstPage, logs, settings] = await Promise.all([
-      api("/admin/users?per_page=100"),
+    setAdminLoading(true);
+    const loadUsers = async (status = "") => {
+      const query = status ? `?status=${status}&per_page=100` : "?per_page=100";
+      const firstPage = await api(`/admin/users${query}`);
+      const pages = Math.ceil(firstPage.total / 100);
+      const extraPages = await Promise.all(Array.from({ length: Math.max(0, pages - 1) }, (_, index) =>
+        api(`/admin/users${query}&page=${index + 2}`)));
+      return [...firstPage.items, ...extraPages.flatMap((page) => page.items)];
+    };
+    const results = await Promise.allSettled([
+      loadUsers(),
+      loadUsers("deleted"),
       api("/admin/activity-logs?per_page=200"),
       api("/admin/settings"),
     ]);
-    // The existing admin table uses created/lastLogin field names.
-    const pages = Math.ceil(firstPage.total / 100);
-    const extraPages = await Promise.all(Array.from({ length: Math.max(0, pages - 1) }, (_, index) =>
-      api(`/admin/users?per_page=100&page=${index + 2}`)));
-    const people = [...firstPage.items, ...extraPages.flatMap((page) => page.items)];
-    setUsers(people.map((user) => ({ ...user,
-      created: user.createdAt, lastLogin: user.lastLoginAt })));
-    setActivity(logs.items);
-    setRegistrationOpenState(settings.registrationOpen);
+    const labels = ["accounts", "deleted accounts", "activity log", "admin settings"];
+    const values = results.map((result, index) => {
+      if (result.status === "fulfilled") return result.value;
+      console.error(`Failed to load admin ${labels[index]}`, result.reason);
+      return null;
+    });
+    const [people, archived, logs, settings] = values;
+
+    // Let one failed request leave other admin data visible instead of
+    // rejecting the whole dashboard and making every count look like zero.
+    setUsers((current) => {
+      const currentPeople = current.filter((user) => !user.deletedAt && user.status !== "deleted");
+      const currentArchive = current.filter((user) => user.deletedAt || user.status === "deleted");
+      const rows = [...(people ?? currentPeople), ...(archived ?? currentArchive)];
+      return rows.map((user) => ({ ...user,
+        created: user.createdAt || user.created,
+        lastLogin: user.lastLoginAt || user.lastLogin }));
+    });
+    if (logs) setActivity(logs.items);
+    if (settings) setRegistrationOpenState(settings.registrationOpen);
+    setAdminError(results
+      .map((result, index) => result.status === "rejected"
+        ? `${labels[index]}: ${result.reason?.message || "request failed"}`
+        : null)
+      .filter(Boolean)
+      .join(" · "));
+    setAdminLoading(false);
   }
 
   async function createUser(values, selfRegistration = false) {
@@ -118,6 +156,16 @@ export function AuthProvider({ children }) {
     await refreshAdmin();
   }
 
+  async function deleteUser(id) {
+    await api(`/admin/users/${id}/delete`, { method: "PATCH", body: {} });
+    await refreshAdmin();
+  }
+
+  async function restoreUser(id) {
+    await api(`/admin/users/${id}/restore`, { method: "PATCH", body: {} });
+    await refreshAdmin();
+  }
+
   async function setRegistrationOpen(value) {
     const result = await api("/admin/settings", {
       method: "PUT", body: { registrationOpen: value },
@@ -126,9 +174,9 @@ export function AuthProvider({ children }) {
   }
 
   return <AuthContext.Provider value={{
-    account, loading, users, activity, registrationOpen,
+    account, loading, users, activity, adminLoading, adminError, registrationOpen,
     login, register, verifyOtp, resendOtp, logout, updateIdentity,
-    createUser, updateUser, setRegistrationOpen, refreshAdmin,
+    createUser, updateUser, deleteUser, restoreUser, setRegistrationOpen, refreshAdmin,
   }}>{!loading && children}</AuthContext.Provider>;
 }
 

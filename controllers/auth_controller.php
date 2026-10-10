@@ -35,9 +35,9 @@ function send_verification_code(mysqli $conn, int $userId, string $email): bool
         verification_email_text($otp)
     );
     if (!$sent) {
-        $remove = mysqli_prepare($conn, 'DELETE FROM Otp_Codes WHERE otp_id = ?');
-        mysqli_stmt_bind_param($remove, 'i', $otpId);
-        mysqli_stmt_execute($remove);
+        $delete = mysqli_prepare($conn, 'DELETE FROM Otp_Codes WHERE otp_id = ?');
+        mysqli_stmt_bind_param($delete, 'i', $otpId);
+        mysqli_stmt_execute($delete);
         return false;
     }
 
@@ -125,7 +125,7 @@ switch ($authAction) {
         
         if (!$user) send_error('Account not found', 404);
         if ((bool) $user['email_verified']) send_error('This email is already verified; please sign in', 409);
-        if ($user['status'] !== 'active') send_error('This account is suspended', 403);
+        if ($user['status'] !== 'active') send_error('This account is ' . $user['status'], 403);
 
         $userId = (int) $user['user_id'];
         $recent = mysqli_prepare($conn, "SELECT expires_at FROM Otp_Codes WHERE user_id = ? AND purpose = 'email_verification' AND used = 0 ORDER BY otp_id DESC LIMIT 1");
@@ -159,6 +159,7 @@ switch ($authAction) {
         mysqli_stmt_bind_param($stmt, 's', $input['email']);
         mysqli_stmt_execute($stmt);
         $record = mysqli_fetch_assoc(mysqli_stmt_get_result($stmt));
+
         if (!$record || !hash_equals($record['code'], (string) $input['otp'])) {
             send_error('Invalid verification code', 400);
         }
@@ -196,7 +197,7 @@ switch ($authAction) {
             send_error('Invalid email or password', 401);
         }
         if (!(bool) $user['email_verified']) send_error('Verify your email before signing in', 403);
-        if ($user['status'] !== 'active') send_error('This account is suspended', 403);
+        if ($user['status'] !== 'active') send_error('This account is ' . $user['status'], 403);
 
         // Return the raw token once, but save only its hash in Tokens.
         $rawToken = bin2hex(random_bytes(32));

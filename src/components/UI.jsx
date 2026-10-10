@@ -1,7 +1,9 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useApp } from "../state/AppContext";
+import { useAuth } from "../state/AuthContext";
 import { progress } from "../lib/format";
+import { budgetStatus } from "../lib/budget-status";
 import logoBlack from "../assets/logo-black.svg";
 import logoWhite from "../assets/logo-white.svg";
 
@@ -25,6 +27,13 @@ export function Icon({ name, ...props }) {
         <rect x="2" y="6" width="20" height="14" rx="2" />
         <path d="M2 10h20" />
         <circle cx="17" cy="15" r="1" />
+      </>
+    ),
+    wallet: (
+      <>
+        <path d="M4 6.5A2.5 2.5 0 0 1 6.5 4H20v16H6.5A2.5 2.5 0 0 1 4 17.5z" />
+        <path d="M4 7h13a3 3 0 0 1 3 3v1h-5a2 2 0 0 0 0 4h5v2" />
+        <path d="M16 13h.01" />
       </>
     ),
     goals: <path d="M5 21V4h13l-3 4 3 4H5" />,
@@ -105,8 +114,9 @@ export function Icon({ name, ...props }) {
 }
 
 export function Logo() {
+  const { account } = useAuth();
   return (
-    <Link to="/" className="logo">
+    <Link to={account ? account.role === "admin" ? "/admin" : "/dashboard" : "/"} className="logo">
       <img className="logo-img logo-light" src={logoBlack} alt="PennyLedger" />
       <img className="logo-img logo-dark" src={logoWhite} alt="PennyLedger" />
     </Link>
@@ -302,6 +312,7 @@ export function ProgressBar({ value, fill = "green" }) {
 export function BudgetRow({ budget }) {
   const { money } = useApp();
   const over = budget.spent > budget.limit;
+  const status = budgetStatus(budget);
   return (
     <div className="prog-row">
       <div className="prow-top">
@@ -314,6 +325,9 @@ export function BudgetRow({ budget }) {
         value={progress(budget.spent, budget.limit)}
         fill={over ? "red" : budget.category === "Groceries" ? "green" : "blue"}
       />
+      <p className={over ? 'budget-overage' : 'report-caption'}>
+        {status.label} · {status.percent.toFixed(1)}% used{over ? ` · Exceeded by ${money(status.exceeded)}` : ''}
+      </p>
     </div>
   );
 }
@@ -345,6 +359,7 @@ export function Summary({ items }) {
       {items.map((item) => (
         <div className="summary-cell" key={item.label}>
           <p className="sc-label">{item.label}</p>
+          {item.action}
           <p className={`sc-value ${item.tone || ""}`}>{item.value}</p>
         </div>
       ))}
