@@ -1,4 +1,4 @@
-﻿import { useState } from "react";
+﻿import { useState, useEffect } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "../state/AuthContext";
 import { Field, Logo, PasswordField, ThemeSwitch } from "../components/UI";
@@ -12,6 +12,19 @@ export default function Auth({ signup = false, admin = false }) {
   const [showResend, setShowResend] = useState(false);
   const [notice, setNotice] = useState("");
   const [otp, setOtp] = useState("");
+
+  const [isDarkMode, setIsDarkMode] = useState(
+    typeof document !== "undefined" && document.documentElement.classList.contains("dark")
+  );
+
+  useEffect(() => {
+    const observer = new MutationObserver(() => {
+      setIsDarkMode(document.documentElement.classList.contains("dark"));
+    });
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+    return () => observer.disconnected?.() || observer.disconnect();
+  }, []);
+
   if (account)
     return (
       <Navigate
@@ -19,11 +32,11 @@ export default function Auth({ signup = false, admin = false }) {
         to={account.role === "admin" ? "/admin" : "/dashboard"}
       />
     );
+
   async function submit(event) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     const password = form.get("password");
-    // Match PHP's signup rule here so the user sees the reason immediately.
     if (signup && String(password).length < 8)
       return setError("Password must be at least 8 characters.");
     if (signup && password !== form.get("verify-password"))
@@ -32,12 +45,8 @@ export default function Auth({ signup = false, admin = false }) {
     setError("");
     try {
       if (signup) {
-        // Registration creates an unverified account. The user must enter the
-        // emailed code before login is allowed by PHP.
         const result = await register({ name: form.get("name"), email: form.get("email"), password });
         setVerificationEmail(form.get("email"));
-        // Registration may succeed even when SMTP is temporarily unavailable.
-        // Keep the account's email here so the user can request another code.
         if (result.emailSent) setNotice("Verification code sent. Check your email.");
         else setError("Account created, but email could not be sent. Check mail settings, then use Resend code.");
         return;
@@ -45,13 +54,12 @@ export default function Auth({ signup = false, admin = false }) {
       await login(form.get("email"), password, admin ? "admin" : "user");
       navigate(admin ? "/admin" : "/dashboard", { replace: true });
     } catch (error) {
-      // PHP supplies field-specific validation errors; show the password
-      // message instead of the generic "Validation failed" response.
       setError(error.fields?.password || error.message);
     } finally {
       setBusy(false);
     }
   }
+
   return (
     <>
       <header className="auth-header">
@@ -78,14 +86,23 @@ export default function Auth({ signup = false, admin = false }) {
               : "Track your transactions, budgets, and savings goals in your own account."}
           </p>
         </div>
-        <div className="auth-card">
+        <div 
+          className="auth-card"
+          style={isDarkMode ? {
+            backgroundColor: "#203a31",
+            color: "#FFFFFF",
+            border: "1px solid rgba(255, 255, 255, 0.1)"
+          } : {}}
+        >
           <h2>
-            {admin ? "Admin Sign In" : signup ? "Create Account" : "Login"}
+            {admin ? "Admin Sign In" : signup ? "Create Account" : showResend ? "Resend Code" : "Login"}
           </h2>
           <p>
             {admin
               ? "Administrator accounts only"
-              : "Your personal finance workspace"}
+              : showResend
+                ? "Get a new verification code sent to your inbox"
+                : "Your personal finance workspace"}
           </p>
           {notice && <p role="status" className="report-caption">{notice}</p>}
           {verificationEmail ? (
@@ -105,8 +122,12 @@ export default function Auth({ signup = false, admin = false }) {
               <p>Enter the six-digit code sent to {verificationEmail}.</p>
               <Field label="Verification code" name="otp" inputMode="numeric"
                 value={otp} onChange={(event) => setOtp(event.target.value)} required />
-              {error && <p className="auth-error" role="alert">{error}</p>}
-              <button type="submit" className="btn btn-dark" disabled={busy}>Verify email</button>
+              {error && (
+                <p className="auth-error" role="alert" style={{ padding: "10px 14px", marginBottom: "12px", borderRadius: "6px" }}>
+                  {error}
+                </p>
+              )}
+              <button type="submit" className={isDarkMode ? "btn btn-outline-light" : "btn btn-dark"} disabled={busy}>Verify email</button>
               <button type="button" className="btn btn-outline" disabled={busy}
                 onClick={async () => {
                   setBusy(true);
@@ -139,10 +160,14 @@ export default function Auth({ signup = false, admin = false }) {
                 setBusy(false);
               }
             }}>
-              <p>Enter the email for your unverified account.</p>
+              <p style={{ textAlign: "center", marginTop: "8px", marginBottom: "8px" }}>Enter the email for your unverified account.</p>
               <Field label="Email" name="email" type="email" autoComplete="email" required />
-              {error && <p className="auth-error" role="alert">{error}</p>}
-              <button type="submit" className="btn btn-dark" disabled={busy}>Send new code</button>
+              {error && (
+                <p className="auth-error" role="alert" style={{ padding: "10px 14px", marginBottom: "12px", borderRadius: "6px" }}>
+                  {error}
+                </p>
+              )}
+              <button type="submit" className={isDarkMode ? "btn btn-outline-light" : "btn btn-dark"} disabled={busy} style={{ marginBottom: "10px" }}>Send new code</button>
               <button type="button" className="btn btn-outline" onClick={() => {
                 setShowResend(false);
                 setError("");
@@ -189,11 +214,11 @@ export default function Auth({ signup = false, admin = false }) {
                 </>
               )}
               {error && (
-                <p className="auth-error" role="alert">
+                <p className="auth-error" role="alert" style={{ padding: "10px 14px", marginBottom: "12px", borderRadius: "6px" }}>
                   {error}
                 </p>
               )}
-              <button type="submit" className="btn btn-dark" disabled={busy}>
+              <button type="submit" className={isDarkMode ? "btn btn-outline-light" : "btn btn-dark"} disabled={busy}>
                 {busy ? "Please wait…" : signup ? "Sign Up" : "Login"}
               </button>
             </form>

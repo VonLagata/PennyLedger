@@ -9,7 +9,7 @@
 mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
 
 $dbHost = getenv('DB_HOST') ?: '127.0.0.1';
-$dbPort = (int) (getenv('DB_PORT') ?: 3307);
+$dbPort = (int) (getenv('DB_PORT') ?: 3306);
 $dbName = getenv('DB_NAME') ?: 'PersonalBudget_db';
 $dbUser = getenv('DB_USER') ?: 'root';
 $dbPassword = getenv('DB_PASSWORD') ?: '';
