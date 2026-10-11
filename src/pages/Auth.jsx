@@ -45,13 +45,9 @@ export default function Auth({ signup = false, admin = false }) {
     setError("");
     try {
       if (signup) {
-<<<<<<< HEAD
-        const result = await register({ name: form.get("name"), email: form.get("email"), password });
-=======
         // Registration creates an unverified account. The user must enter the
         // emailed code before login is allowed by PHP.
         const result = await register({ firstName: form.get("first_name").trim(), lastName: form.get("last_name").trim(), email: form.get("email"), password });
->>>>>>> ba6b0df (update by ange)
         setVerificationEmail(form.get("email"));
         if (result.emailSent) setNotice("Verification code sent. Check your email.");
         else setError("Account created, but email could not be sent. Check mail settings, then use Resend code.");
