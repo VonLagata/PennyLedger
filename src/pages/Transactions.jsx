@@ -12,6 +12,7 @@ export function TransactionTable({ records, restoreOnly = false }) {
           <tr>
             <th>Description</th>
             <th>Category</th>
+            <th>Payment Method</th>
             <th>Date</th>
             <th className="th-amount">Amount</th>
             <th className="th-actions">Actions</th>
@@ -28,6 +29,7 @@ export function TransactionTable({ records, restoreOnly = false }) {
                   {tx.category}
                 </span>
               </td>
+              <td className="td-payment">{tx.paymentMethod || "Not recorded"}</td>
               <td className="td-date">{date(tx.date)}</td>
               <td className={`td-amount${tx.amount > 0 ? " amt-pos" : ""}`}>
                 {money(tx.amount, true)}
@@ -55,7 +57,7 @@ export function TransactionTable({ records, restoreOnly = false }) {
           ))}
           {!records.length && (
             <tr>
-              <td className="td-empty" colSpan={5}>
+              <td className="td-empty" colSpan={6}>
                 No transactions found.
               </td>
             </tr>

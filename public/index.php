@@ -5,9 +5,14 @@
 // REVISED from public/index.php. This is the single PHP entry point. The
 // request path selects a controller; each controller handles method and ID.
 
-$allowedOrigin = getenv('APP_ORIGIN') ?: 'http://127.0.0.1:5173';
-// Match the configured React origin exactly; a wildcard would allow any site.
-header("Access-Control-Allow-Origin: {$allowedOrigin}");
+$configuredOrigin = getenv('APP_ORIGIN');
+$allowedOrigins = $configuredOrigin
+    ? [$configuredOrigin]
+    : ['http://127.0.0.1:5173', 'http://localhost:5173'];
+$requestOrigin = $_SERVER['HTTP_ORIGIN'] ?? '';
+if (in_array($requestOrigin, $allowedOrigins, true)) {
+    header("Access-Control-Allow-Origin: {$requestOrigin}");
+}
 header('Vary: Origin');
 header('Access-Control-Allow-Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization, Idempotency-Key');

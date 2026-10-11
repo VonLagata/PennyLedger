@@ -1,12 +1,13 @@
 import { useState } from "react";
 import { useApp } from "../state/AppContext";
 import { Icon, PageTitle, ProgressBar } from "../components/UI";
-import { GoalModal } from "../components/Forms";
+import { GoalModal, GoalContributionModal } from "../components/Forms";
 import { progress } from "../lib/format";
 
 export default function Goals() {
   const { goals, money } = useApp();
   const [editing, setEditing] = useState(null);
+  const [contributing, setContributing] = useState(null);
   return (
     <>
       <PageTitle
@@ -22,6 +23,7 @@ export default function Goals() {
         </button>
       </PageTitle>
       <div className="goals-grid">
+        {!goals.length && <p className="report-caption">No financial goals yet. Use Add Goal to set a savings target.</p>}
         {goals.map((goal) => (
           <div className="goal-card" key={goal.id}>
             <div className="gc-top">
@@ -48,6 +50,10 @@ export default function Goals() {
               </span>
               <b>{progress(goal.saved, goal.target)}%</b>
             </div>
+            <div className="budget-card-actions">
+              <button className="btn btn-outline btn-sm" onClick={() => setEditing(goal)}>Edit Goal</button>
+              <button className="btn btn-primary btn-sm" aria-label={`Add money to ${goal.name}`} onClick={() => setContributing(goal)}>Add Money</button>
+            </div>
           </div>
         ))}
       </div>
@@ -57,6 +63,7 @@ export default function Goals() {
           onClose={() => setEditing(null)}
         />
       )}
+      {contributing && <GoalContributionModal goal={contributing} onClose={() => setContributing(null)} />}
     </>
   );
 }

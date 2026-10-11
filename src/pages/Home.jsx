@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
-import { Link } from "react-router-dom";
-import { ThemeSwitch } from "../components/UI";
+import { Link, useLocation } from "react-router-dom";
+import { Icon, ThemeSwitch } from "../components/UI";
 import { useAuth } from "../state/AuthContext";
 import logoBlack from "../assets/logo-black.svg";
 import logoWhite from "../assets/logo-white.svg";
@@ -9,6 +9,13 @@ export default function Home() {
   const { account } = useAuth();
   const logoDestination = account ? account.role === "admin" ? "/admin" : "/dashboard" : "/";
   const root = useRef(null);
+  const location = useLocation();
+  useEffect(() => {
+    const section = location.hash.slice(1);
+    if (["top", "features", "security"].includes(section)) {
+      root.current?.querySelector(`#${section}`)?.scrollIntoView({ behavior: window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
+    }
+  }, [location.hash]);
   useEffect(() => {
     const targets = root.current.querySelectorAll(
       ".section-head, .feature-grid, .cta-band",
@@ -50,9 +57,9 @@ export default function Home() {
         </Link>
         <nav>
           <div className="nav-links">
-            <a href="#top">Home</a>
-            <a href="#features">Features</a>
-            <a href="#security">Security</a>
+            <Link to="/#top">Home</Link>
+            <Link to="/#features">Features</Link>
+            <Link to="/#security">Security</Link>
           </div>
         </nav>
         <div className="auth-links">
@@ -75,15 +82,13 @@ export default function Home() {
             </span>
             <h1>Take control of your money, one penny at a time.</h1>
             <p>
-              PennyLedger is an intuitive personal budget and expense tracker
-              designed to help you gain total control over your daily finances.
-              By seamlessly logging transactions, categorizing spending, and
-              visualizing your cash flow, it turns complex financial data into
-              actionable insights.
+              Your cash, GCash, bank balances, and savings plans deserve one clear
+              picture. Track income and expenses, build category budgets, and
+              put money toward the goals that matter to you—all in one workspace.
             </p>
             <div className="hero-actions">
               <Link className="btn btn-primary" to="/signup">
-                Sign Up
+                Start Your Money Plan
               </Link>
               <Link className="btn btn-ghost-light" to="/login">
                 Log In
@@ -92,12 +97,12 @@ export default function Home() {
           </div>
         </div>
         <div className="stat-callout">
-          <p className="label">Join using PennyLedger.</p>
+          <p className="label">A clearer picture, every day.</p>
           <div className="ring-row">
             <div className="ring"></div>
             <div className="ring-text">
-              <strong>65%</strong>
-              <small>of our users are Filipinos!</small>
+              <strong>One view</strong>
+              <small>All your wallet balances, budgets, and goals.</small>
             </div>
           </div>
         </div>
@@ -134,8 +139,8 @@ export default function Home() {
             </div>
             <h3>Track every transaction</h3>
             <p>
-              Log income and expenses in seconds and see exactly where your
-              money goes, categorized automatically.
+              Record income and expenses with your chosen category. Search and
+              filter your history by type, category, and month.
             </p>
           </div>
           <div className="feature-card">
@@ -189,6 +194,21 @@ export default function Home() {
             </p>
           </div>
         </div>
+        <div className="feature-grid landing-extra-features">
+          <article className="feature-card"><div className="fc-icon"><Icon name="wallet" /></div><h3>Bring your wallets together</h3><p>Keep cash, digital wallets, and bank balances in one place. Your Total Balance combines the current balance of every wallet you record.</p></article>
+          <article className="feature-card"><div className="fc-icon"><Icon name="budget" /></div><h3>Know what you can spend</h3><p>Compare this month’s income, expenses, and budget limits. See what remains in your budget before planning your next purchase.</p></article>
+          <article className="feature-card"><div className="fc-icon"><Icon name="plus" /></div><h3>Make saving a habit</h3><p>Create a goal with a target and date, then use Add Money to record each contribution. Watch your progress grow without rewriting the goal.</p></article>
+        </div>
+      </section>
+
+      <section className="section landing-how">
+        <div className="section-head"><span className="eyebrow">A routine you can keep</span><h2>From scattered numbers to a plan</h2><p>Built for everyday expenses, student budgets, and the milestones you’re saving toward.</p></div>
+        <div className="feature-grid">
+          <article className="feature-card"><span className="eyebrow">01 · Set up</span><h3>Start with your balances</h3><p>Add your wallets and their current balances. Choose the currency and date format that feel familiar.</p></article>
+          <article className="feature-card"><span className="eyebrow">02 · Record</span><h3>Give every transaction a place</h3><p>Log your allowance, salary, purchases, and bills. Set category spending limits with a budget process.</p></article>
+          <article className="feature-card"><span className="eyebrow">03 · Review</span><h3>Turn progress into your next step</h3><p>Review your dashboard, explore spending categories, and add contributions to your savings goals.</p></article>
+        </div>
+        <p className="landing-note">You record and manage your balances. PennyLedger does not connect to your bank or move money between financial accounts.</p>
       </section>
 
       <section className="section" id="security" style={{ paddingTop: "0" }}>
@@ -196,19 +216,22 @@ export default function Home() {
           <span className="eyebrow">Built on trust</span>
           <h2>Manage your money securely, with trust</h2>
           <p>
-            At PennyLedger, your financial privacy and peace of mind are our
-            highest priorities. We protect your account using end-to-end
-            encryption and bank-level security protocols, ensuring your
-            financial logs, budgets, and sensitive credentials remain strictly
-            confidential and shielded from unauthorized access.
+            Your personal ledger belongs to your account. PennyLedger uses
+            password hashing, email verification, authenticated sessions, and
+            account ownership checks to protect access to your records.
           </p>
+        </div>
+        <div className="feature-grid">
+          <article className="feature-card"><h3>Verified account access</h3><p>Verify your email before signing in. Passwords are stored as hashes, and password changes sign you out of existing sessions.</p></article>
+          <article className="feature-card"><h3>Your own financial workspace</h3><p>Personal records are checked against the signed-in account. Administrator tools use a separate role for account management.</p></article>
+          <article className="feature-card"><h3>Control your records</h3><p>Export your ledger data and archive transactions you want to keep out of your main history. Restore archived records when you need them.</p></article>
         </div>
       </section>
 
       <div className="cta-band">
         <div>
           <h2>Ready to take control of your money?</h2>
-          <p>Create your free PennyLedger account in under a minute.</p>
+          <p>Build a budget, organize your wallets, and take the next step toward your savings goals.</p>
         </div>
         <Link className="btn btn-primary" to="/signup">
           Get Started — It's Free
@@ -278,8 +301,8 @@ export default function Home() {
           </div>
           <div className="footer-col">
             <h4>Product</h4>
-            <a href="#features">Features</a>
-            <a href="#security">Security</a>
+            <Link to="/#features">Features</Link>
+            <Link to="/#security">Security</Link>
             <Link to="/signup">Get Started</Link>
           </div>
           <div className="footer-col">

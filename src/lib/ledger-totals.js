@@ -1,7 +1,9 @@
 import { localDate } from './format';
 export function ledgerTotals(transactions, budgets, wallets, today = localDate()) {
   const month = today.slice(0, 7);
-  const monthlyBudgets = budgets.filter((b) => b.period === 'monthly' && b.startDate?.slice(0, 7) === month);
+  const matchingBudgets = budgets.filter((b) => b.period === 'monthly' && b.startDate?.slice(0, 7) === month);
+  const overallBudgets = matchingBudgets.filter((b) => b.isMonthlyPlan || b.category === 'Monthly budget');
+  const monthlyBudgets = overallBudgets.length ? overallBudgets : matchingBudgets;
   const monthly = transactions.filter((t) => t.date.startsWith(month));
   const budgeted = monthlyBudgets.reduce((sum, b) => sum + b.limit, 0);
   const spent = monthlyBudgets.reduce((sum, b) => sum + b.spent, 0);

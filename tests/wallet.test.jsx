@@ -12,12 +12,12 @@ vi.mock("../src/state/AppContext", () => ({ useApp: () => ({
 }) }));
 it('includes saved wallet balances in totals and submits the wallet popup', async () => {
   render(<MemoryRouter><Dashboard /></MemoryRouter>);
-  expect(screen.getByText(/\$200/)).toBeInTheDocument();
+  expect(screen.getByText('Total Budgeted').closest('.stat-card')).toHaveTextContent('$200');
   expect(screen.queryByText('$700')).not.toBeInTheDocument();
   expect(screen.getByText('$190')).toBeInTheDocument();
   expect(screen.getByText('GCash')).toBeInTheDocument();
-  expect(screen.getByRole('button', { name: 'Manage' })).toHaveAttribute('aria-expanded', 'false');
-  fireEvent.click(screen.getByRole('button', { name: 'Manage' }));
+  expect(screen.getByRole('button', { name: 'eWallet' })).toHaveAttribute('aria-expanded', 'false');
+  fireEvent.click(screen.getByRole('button', { name: 'eWallet' }));
   fireEvent.click(screen.getByRole('button', { name: /Add wallet/ }));
   fireEvent.change(screen.getByLabelText('Wallet name'), { target: { value: 'Bank savings' } });
   fireEvent.change(screen.getByLabelText('Type'), { target: { value: 'bank' } });
@@ -29,7 +29,7 @@ it('includes saved wallet balances in totals and submits the wallet popup', asyn
 
 it('edits an existing wallet', async () => {
   render(<MemoryRouter><Dashboard /></MemoryRouter>);
-  fireEvent.click(screen.getByRole('button', { name: 'Manage' }));
+  fireEvent.click(screen.getByRole('button', { name: 'eWallet' }));
   fireEvent.click(screen.getByRole('button', { name: 'Edit GCash' }));
   expect(screen.getByLabelText('Wallet name')).toHaveValue('GCash');
   fireEvent.change(screen.getByLabelText('Current balance (USD)'), { target: { value: '600' } });
@@ -39,7 +39,7 @@ it('edits an existing wallet', async () => {
 
 it('allows editing the physical-money balance but prevents deleting or renaming it', async () => {
   render(<MemoryRouter><Dashboard /></MemoryRouter>);
-  fireEvent.click(screen.getByRole('button', { name: 'Manage' }));
+  fireEvent.click(screen.getByRole('button', { name: 'eWallet' }));
   fireEvent.click(screen.getByRole('button', { name: 'Edit Physical money' }));
   expect(screen.queryByRole('button', { name: 'Delete wallet' })).not.toBeInTheDocument();
   expect(screen.getByLabelText('Wallet name')).toHaveAttribute('readonly');
@@ -52,7 +52,7 @@ it('allows editing the physical-money balance but prevents deleting or renaming 
 it('asks for a password before deleting and shows a rejected password', async () => {
   deleteWallet.mockRejectedValueOnce(new Error('Incorrect password'));
   render(<MemoryRouter><Dashboard /></MemoryRouter>);
-  fireEvent.click(screen.getByRole('button', { name: 'Manage' }));
+  fireEvent.click(screen.getByRole('button', { name: 'eWallet' }));
   fireEvent.click(screen.getByRole('button', { name: 'Edit GCash' }));
   fireEvent.click(screen.getByRole('button', { name: 'Delete wallet' }));
   expect(deleteWallet).not.toHaveBeenCalled();

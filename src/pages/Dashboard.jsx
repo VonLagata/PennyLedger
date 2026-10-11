@@ -13,10 +13,12 @@ import {
 } from "../components/UI";
 import {
   BudgetModal,
+  GoalContributionModal,
   TransactionModal,
 } from "../components/Forms";
 import { progress, localDate } from "../lib/format";
 import { ledgerTotals } from "../lib/ledger-totals";
+import SpendingInsights from "../components/SpendingInsights";
 
 function WalletModal({ wallet, onClose }) {
   const { createWallet, updateWallet, deleteWallet, currency, notify } = useApp();
@@ -86,15 +88,17 @@ function WalletModal({ wallet, onClose }) {
 }
 
 export default function Dashboard() {
-  const { transactions, budgets: allBudgets, wallets, goals, profile, money, date } =
+  const { transactions, activities, budgets: allBudgets, wallets, goals, profile, money, date } =
     useApp();
   const [modal, setModal] = useState(null);
   const [walletModal, setWalletModal] = useState(false);
   const [manageWallets, setManageWallets] = useState(false);
   const [editingWallet, setEditingWallet] = useState(null);
+  const [editingBudget, setEditingBudget] = useState(null);
+  const [contributingGoal, setContributingGoal] = useState(null);
   // Every saved transaction contributes to the totals; the old demo-only
   // calculation ignored records loaded from MySQL.
-  const { balance, income, expenses, remaining, monthlyBudgets: budgets } = ledgerTotals(transactions, allBudgets, wallets);
+  const { balance, income, expenses, budgeted, remaining, monthlyBudgets: budgets } = ledgerTotals(transactions, allBudgets, wallets);
   const overBudget = budgets.some((budget) => budget.spent > budget.limit);
   const categorySpending = new Map();
   for (const tx of transactions.filter((tx) => tx.amount < 0 && tx.date.startsWith(localDate().slice(0, 7)))) {
@@ -119,14 +123,16 @@ export default function Dashboard() {
     })
     .join(",");
   const stats = [
-    ["Total Balance", money(balance), "", "flat"],
-    ["Monthly Income", money(income), "", "flat"],
-    ["Monthly Expenses", money(expenses), "", "flat"],
+    ["Total Balance", money(balance), "", "flat", "Combined current balances of all wallets"],
+    ["Monthly Income", money(income), "", "flat", "Income transactions recorded this month"],
+    ["Monthly Expenses", money(expenses), "", "flat", "Expense transactions recorded this month"],
+    ["Total Budgeted", money(budgeted), "", "flat", "Spending limit for this month"],
     [
       "Remaining Budget",
       money(remaining),
       overBudget || remaining < 0 ? "Over budget" : "On track",
       overBudget || remaining < 0 ? "down" : "flat",
+      "This month’s budget limit minus recorded spending",
     ],
   ];
   return (
@@ -142,7 +148,7 @@ export default function Dashboard() {
             onClick={() => setModal("budget")}
           >
             <Icon name="budget" />
-            Add Budget
+            Add Budget Process
           </button>
           <button
             className="btn btn-primary btn-sm"
@@ -153,8 +159,8 @@ export default function Dashboard() {
           </button>
         </div>
       </div>
-      <div className="stat-grid">
-        {stats.map(([label, value, delta, tone], index) => (
+      <div className="stat-grid dashboard-stat-grid">
+        {stats.map(([label, value, delta, tone, description], index) => (
           <div
             className="stat-card"
             key={label}
@@ -186,6 +192,7 @@ export default function Dashboard() {
             </div>
             <p className="stat-label">{label}</p>
             <p className="stat-value">{value}</p>
+            <p className="report-caption">{description}</p>
           </div>
         ))}
       </div>
@@ -211,6 +218,7 @@ export default function Dashboard() {
         </div>
       </div>
       <div className="dash-grid">
+        <SpendingInsights compact />
         <div className="dash-col">
           <section className="card">
             <div className="card-head">
@@ -218,7 +226,10 @@ export default function Dashboard() {
               <span className="muted-tag">This Month</span>
             </div>
             {budgets.map((budget) => (
-              <BudgetRow key={budget.id} budget={budget} />
+              <div key={budget.id}>
+                <BudgetRow budget={budget} />
+                <button className="btn btn-outline btn-sm" aria-label={`Edit ${budget.category} budget progress`} onClick={() => setEditingBudget(budget)}>Edit Budget Process</button>
+              </div>
             ))}
           </section>
           <section className="card">
@@ -229,6 +240,7 @@ export default function Dashboard() {
               </Link>
             </div>
             <div className="tx-list">
+              {!transactions.some((tx) => !tx.archived) && <p className="report-caption">No transactions yet. Add income or an expense to get started.</p>}
               {transactions
                 .filter((tx) => !tx.archived)
                 .slice(0, 5)
@@ -245,7 +257,7 @@ export default function Dashboard() {
                       <div>
                         <p className="tx-name">{tx.description}</p>
                         <p className="tx-meta">
-                          {tx.category} · {date(tx.date)}
+                          {tx.category} · {tx.paymentMethod || "Payment method not recorded"} · {date(tx.date)}
                         </p>
                       </div>
                     </div>
@@ -258,6 +270,22 @@ export default function Dashboard() {
           </section>
         </div>
         <div className="dash-col">
+          <section className="card">
+            <div className="card-head"><h2>Recent Activity</h2></div>
+            <p className="report-caption">Activity recorded in this browser.</p>
+            <div className="tx-list">
+              {!(activities || []).length && <p className="report-caption">No activity yet. Wallet, budget, and goal changes will appear here.</p>}
+              {(activities || []).slice(0, 8).map((activity) => (
+                <div className="tx-row" key={activity.id}>
+                  <div className="tx-left"><div>
+                    <p className="tx-name">{activity.description}</p>
+                    <p className="tx-meta"><time dateTime={activity.date}>{date(activity.date.slice(0, 10))} · {new Date(activity.date).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</time></p>
+                  </div></div>
+                  {Number.isFinite(activity.amount) && <span className="tx-amt">{money(activity.amount)}</span>}
+                </div>
+              ))}
+            </div>
+          </section>
           <section className="card">
             <div className="card-head">
               <h2>Spending Categories</h2>
@@ -306,6 +334,7 @@ export default function Dashboard() {
                 <p className="grow-sub">
                   {money(goal.saved)} of {money(goal.target)}
                 </p>
+                <button className="btn btn-outline btn-sm" aria-label={`Add money to ${goal.name}`} onClick={() => setContributingGoal(goal)}>Add Money</button>
               </div>
             ))}
           </section>
@@ -315,6 +344,8 @@ export default function Dashboard() {
         <TransactionModal onClose={() => setModal(null)} />
       )}
       {modal === "budget" && <BudgetModal onClose={() => setModal(null)} />}
+      {editingBudget && <BudgetModal budget={editingBudget} onClose={() => setEditingBudget(null)} />}
+      {contributingGoal && <GoalContributionModal goal={contributingGoal} onClose={() => setContributingGoal(null)} />}
       {walletModal && <WalletModal onClose={() => setWalletModal(false)} />}
       {editingWallet && <WalletModal wallet={editingWallet} onClose={() => setEditingWallet(null)} />}
     </>

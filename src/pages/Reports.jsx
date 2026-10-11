@@ -1,4 +1,6 @@
 import { useRef, useState } from "react";
+import { isArchived } from "../lib/report-archive";
+import SpendingInsights from "../components/SpendingInsights";
 import { useApp } from "../state/AppContext";
 import { reportTypes } from "../state/data";
 import { buildReportRanges, createReport, reportCsvRows } from "../lib/reports";
@@ -14,8 +16,11 @@ import {
 
 export function ReportTable({ records, onView }) {
   const { date, archiveReport, notify } = useApp();
+  const [pending, setPending] = useState(null);
+  const [error, setError] = useState("");
   return (
     <div className="table-scroll">
+      {error && <p role="alert" className="form-error">{error}</p>}
       <table className="archive-table">
         <thead>
           <tr>
@@ -30,7 +35,7 @@ export function ReportTable({ records, onView }) {
           {records.map((report) => (
             <tr
               key={report.id}
-              className={report.archived ? "is-archived-row" : ""}
+              className={isArchived(report.archived) ? "is-archived-row" : ""}
             >
               <td className="td-name">{report.name}</td>
               <td className="td-type">
@@ -52,16 +57,21 @@ export function ReportTable({ records, onView }) {
                     </button>
                   )}
                   <button
-                    className="icon-btn archive"
-                    aria-label={`${report.archived ? "Restore" : "Archive"} ${report.name}`}
+                    className="btn btn-outline btn-sm"
+                    disabled={pending !== null}
+                    aria-label={`${isArchived(report.archived) ? "Restore" : "Archive"} ${report.name}`}
                     onClick={async () => {
+                      setPending(report.id);
+                      setError("");
                       try {
-                        await archiveReport(report.id, report.archived);
-                        notify(report.archived ? "Report restored" : "Report archived");
-                      } catch (failure) { notify(failure.message); }
+                        await archiveReport(report.id, isArchived(report.archived));
+                        notify(isArchived(report.archived) ? "Report restored" : "Report archived");
+                      } catch (failure) { setError(failure.message); }
+                      finally { setPending(null); }
                     }}
                   >
-                    <Icon name={report.archived ? "restore" : "archive"} />
+                    <Icon name={isArchived(report.archived) ? "restore" : "archive"} />
+                    {pending === report.id ? "Saving…" : isArchived(report.archived) ? "Restore" : "Archive"}
                   </button>
                 </div>
               </td>
@@ -248,7 +258,7 @@ export default function Reports() {
   const reportRanges = buildReportRanges(transactions);
   const report = snapshot || createReport(type, range, transactions, budgets, goals);
   const records = reports.filter(
-    (report) => report.archived === (view === "archived"),
+    (report) => isArchived(report.archived) === (view === "archived"),
   );
   async function generate() {
     const value = createReport(type, range, transactions, budgets, goals);
@@ -340,6 +350,7 @@ export default function Reports() {
           </button>
         </div>
       </section>
+      <SpendingInsights reviewOnly />
       <section className="card report-logs">
         <div className="card-head">
           <h2>Report Logs</h2>
@@ -357,7 +368,7 @@ export default function Reports() {
               {
                 value: "archived",
                 label: "Archived",
-                count: reports.filter((report) => report.archived).length,
+                count: reports.filter((report) => isArchived(report.archived)).length,
               },
             ]}
           />

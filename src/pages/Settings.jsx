@@ -1,6 +1,6 @@
 import { useAuth } from "../state/AuthContext";
 import { api } from "../lib/api";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useApp } from "../state/AppContext";
 import { DATE_FORMATS, download, formatDate, localDate } from "../lib/format";
@@ -41,18 +41,45 @@ export default function Settings() {
   const [deleteText, setDeleteText] = useState("");
   const [deletePassword, setDeletePassword] = useState("");
   const photoInput = useRef(null);
+  const [draftCurrency, setDraftCurrency] = useState(currency);
+  const [pendingPhoto, setPendingPhoto] = useState(null);
+  const [removePhoto, setRemovePhoto] = useState(false);
+  const [photoPreview, setPhotoPreview] = useState(null);
+  const [profileBusy, setProfileBusy] = useState(false);
+  useEffect(() => { setDraftCurrency(currency); }, [currency]);
+  useEffect(() => {
+    if (!pendingPhoto) { setPhotoPreview(null); return; }
+    const url = URL.createObjectURL(pendingPhoto);
+    setPhotoPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [pendingPhoto]);
+  const displayedPhoto = removePhoto ? null : photoPreview || profile.photo;
   async function saveProfile(event) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     const firstName = form.get("first_name").trim();
     const lastName = form.get("last_name").trim();
     if (!firstName || !lastName) return notify("Please enter your first and last name.");
+    setProfileBusy(true);
     try {
       const revised = await updateIdentity(firstName, lastName, form.get("email"), form.get("phone").trim());
       updateProfile(revised);
+      if (pendingPhoto) {
+        const body = new FormData();
+        body.append("photo", pendingPhoto);
+        const saved = await api("/profile/photo", { method: "POST", body });
+        updateProfile({ ...revised, photoUrl: saved.photoUrl });
+      } else if (removePhoto) {
+        await api("/profile/photo", { method: "DELETE" });
+        updateProfile({ ...revised, photoUrl: null });
+      }
+      if (draftCurrency !== currency) setCurrency(draftCurrency);
+      setPendingPhoto(null);
+      setRemovePhoto(false);
+      if (photoInput.current) photoInput.current.value = "";
     } catch (error) {
       return notify(error.message);
-    }
+    } finally { setProfileBusy(false); }
     notify("Profile updated");
   }
   async function changePassword(event) {
@@ -74,7 +101,7 @@ export default function Settings() {
       window.location.hash = "#/login";
     } catch (failure) { setPasswordError(failure.message); }
   }
-  async function photo(event) {
+  function photo(event) {
     const file = event.target.files?.[0];
     if (!file) return;
     if (
@@ -82,13 +109,8 @@ export default function Settings() {
       file.size > 1000000
     )
       return notify("Choose a JPG, PNG, or WebP image under 1 MB.");
-    try {
-      const body = new FormData();
-      body.append("photo", file);
-      const saved = await api("/profile/photo", { method: "POST", body });
-      updateProfile({ ...profile, photoUrl: saved.photoUrl });
-      notify("Profile photo updated");
-    } catch (failure) { notify(failure.message); }
+    setPendingPhoto(file);
+    setRemovePhoto(false);
   }
   return (
     <>
@@ -104,10 +126,10 @@ export default function Settings() {
           </div>
           <div className="profile-row">
             <div className="avatar-lg">
-              {profile.photo ? (
+              {displayedPhoto ? (
                 <img
                   className="profile-photo"
-                  src={profile.photo}
+                  src={displayedPhoto}
                   alt="Profile"
                 />
               ) : (
@@ -122,25 +144,27 @@ export default function Settings() {
               <input
                 ref={photoInput}
                 type="file"
+                aria-label="Profile photo"
+                disabled={profileBusy}
                 accept="image/jpeg,image/png,image/webp"
                 hidden
                 onChange={photo}
               />
               <button
                 className="btn btn-outline btn-sm"
+                disabled={profileBusy}
                 onClick={() => photoInput.current?.click()}
               >
                 Change Photo
               </button>
               <button
                 className="btn btn-outline btn-sm"
+                disabled={profileBusy}
                 style={{ color: "var(--danger)" }}
-                onClick={async () => {
-                  try {
-                    await api("/profile/photo", { method: "DELETE" });
-                    updateProfile({ ...profile, photoUrl: null });
-                    notify("Photo removed");
-                  } catch (failure) { notify(failure.message); }
+                onClick={() => {
+                  setPendingPhoto(null);
+                  setRemovePhoto(true);
+                  if (photoInput.current) photoInput.current.value = "";
                 }}
               >
                 Remove
@@ -148,6 +172,7 @@ export default function Settings() {
             </div>
           </div>
           <form onSubmit={saveProfile}>
+            <fieldset disabled={profileBusy} className="admin-fieldset">
             <div className="settings-fields">
               <Field
                 label="First name"
@@ -174,11 +199,8 @@ export default function Settings() {
                 <label htmlFor="currency">Currency</label>
                 <select
                   id="currency"
-                  value={currency}
-                  onChange={(event) => {
-                    setCurrency(event.target.value);
-                    notify("Currency changed");
-                  }}
+                  value={draftCurrency}
+                  onChange={(event) => setDraftCurrency(event.target.value)}
                 >
                   <option value="PHP">₱ Philippine Peso (PHP)</option>
                   <option value="USD">$ US Dollar (USD)</option>
@@ -186,12 +208,21 @@ export default function Settings() {
                 </select>
               </div>
             </div>
+            <p className="report-caption">Profile details, photo, and currency are saved when you click Save Changes.</p>
+            <button type="button" className="btn btn-outline btn-sm" onClick={(event) => {
+              event.currentTarget.form.reset();
+              setDraftCurrency(currency);
+              setPendingPhoto(null);
+              setRemovePhoto(false);
+              if (photoInput.current) photoInput.current.value = "";
+            }}>Discard Changes</button>
             <button
               className="btn btn-primary btn-sm settings-save"
               type="submit"
             >
-              Save Changes
+              {profileBusy ? "Saving…" : "Save Changes"}
             </button>
+            </fieldset>
           </form>
         </section>
         <section className="card settings-card">

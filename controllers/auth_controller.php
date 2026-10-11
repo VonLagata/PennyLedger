@@ -28,11 +28,17 @@ function send_verification_code(mysqli $conn, int $userId, string $email): bool
     mysqli_stmt_execute($stmt);
     $otpId = mysqli_insert_id($conn);
 
+    $recipient = mysqli_prepare($conn, 'SELECT first_name, last_name FROM Users WHERE user_id = ?');
+    mysqli_stmt_bind_param($recipient, 'i', $userId);
+    mysqli_stmt_execute($recipient);
+    $recipientRow = mysqli_fetch_assoc(mysqli_stmt_get_result($recipient));
+    $recipientName = trim(($recipientRow['first_name'] ?? '') . ' ' . ($recipientRow['last_name'] ?? ''));
+
     $sent = send_email(
         $email,
         'PennyLedger email verification code',
-        verification_email_html($otp),
-        verification_email_text($otp)
+        verification_email_html($otp, $recipientName),
+        verification_email_text($otp, $recipientName)
     );
     if (!$sent) {
         $delete = mysqli_prepare($conn, 'DELETE FROM Otp_Codes WHERE otp_id = ?');

@@ -4,8 +4,8 @@ import { api } from "../lib/api";
 import { localDate, monthlyIncome } from "../lib/format";
 import { Field, FormActions, Modal } from "./UI";
 
-function CategoryField({ categories }) {
-  const [value, setValue] = useState("");
+function CategoryField({ categories, defaultValue = "" }) {
+  const [value, setValue] = useState(defaultValue);
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(-1);
   const id = useId();
@@ -116,55 +116,49 @@ export function TransactionModal({ onClose }) {
   </Modal>;
 }
 
-export function BudgetModal({ onClose }) {
-  const { budgets, createBudget, currency, notify } = useApp();
-  const [categories, setCategories] = useState([]);
+export function BudgetModal({ budget, initialMonth, initialLimit, onClose }) {
+  const { budgets, createBudget, updateBudget, currency, notify } = useApp();
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  useEffect(() => {
-    api("/lookups/categories")
-      .then((items) => setCategories(items.filter((item) => item.type === "expense")))
-      .catch((failure) => setError(failure.message));
-  }, []);
-
   async function submit(event) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
-    const categoryName = form.get("category").trim();
-    if (!categoryName) return setError("Enter a category.");
-    const categoryId = categories.find((item) => item.name.toLowerCase() === categoryName.toLowerCase())?.id;
+    const month = form.get("month");
     const limit = Number(form.get("limit"));
-    if (!Number.isFinite(limit) || limit <= 0 || limit > 1_000_000) {
-      return setError("Enter a limit between 0.01 and 1,000,000.");
-    }
-    const today = localDate();
-    const start = `${today.slice(0, 7)}-01`;
-    const end = `${today.slice(0, 7)}-${String(new Date(Number(today.slice(0, 4)), Number(today.slice(5, 7)), 0).getDate()).padStart(2, "0")}`;
-    if (budgets.some((item) => item.categoryId === categoryId && item.startDate === start)) {
-      return setError("A budget for this category already exists this month.");
-    }
+    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month) || month < "1900-01" || month > "2100-12") return setError("Choose a valid month.");
+    if (!Number.isFinite(limit) || limit <= 0 || limit > 1_000_000) return setError("Enter a limit between 0.01 and 1,000,000.");
+    if (budgets.some((item) => item.id !== budget?.id && (item.isMonthlyPlan || item.category === "Monthly budget") && item.startDate?.slice(0, 7) === month)) return setError("A budget process already exists for this month. Edit its limit instead.");
+    const [year, monthNumber] = month.split("-").map(Number);
+    const end = `${month}-${String(new Date(year, monthNumber, 0).getDate()).padStart(2, "0")}`;
+    setBusy(true);
+    setError("");
     try {
-      // The backend requires period and dates; the current UI creates a
-      // monthly budget covering the current calendar month.
-      await createBudget({ category_name: categoryName, budget_amount: limit,
-        budget_period: "monthly", start_date: start, end_date: end });
-      notify("Budget created");
+      // Compatibility with the existing API; this reserved category denotes an overall month plan.
+      const values = { category_name: "Monthly budget", budget_amount: limit,
+        budget_period: "monthly", start_date: `${month}-01`, end_date: end };
+      if (budget) await updateBudget(budget.id, values);
+      else await createBudget(values);
+      notify(budget ? "Budget updated" : "Budget created");
       onClose();
     } catch (failure) { setError(failure.message); }
+    finally { setBusy(false); }
   }
-
-  return <Modal title="Add Budget" onClose={onClose}>
+  return <Modal title={budget ? "Edit Budget Process" : "Add Budget Process"} onClose={() => { if (!busy) onClose(); }}>
     <form onSubmit={submit}>
-      <CategoryField categories={categories} />
-      <Field label={`Monthly limit (${currency})`} name="limit" type="number"
-        min="0.01" max="1000000" step="0.01" required />
-      {error && <p role="alert" className="form-error">{error}</p>}
-      <FormActions onClose={onClose} label="Add Budget" />
+      <fieldset disabled={busy} className="admin-fieldset">
+        <Field label="Month" name="month" type="month" min="1900-01" max="2100-12" defaultValue={budget?.startDate?.slice(0, 7) || initialMonth || localDate().slice(0, 7)} required />
+        <Field label={`Monthly limit (${currency})`} name="limit" type="number" defaultValue={budget?.limit ?? initialLimit ?? ""} min="0.01" max="1000000" step="0.01" required />
+        <p className="report-caption">One spending limit for all expenses in the selected month.</p>
+        {error && <p role="alert" className="form-error">{error}</p>}
+        <FormActions onClose={onClose} label={busy ? "Saving…" : budget ? "Save Changes" : "Add Budget Process"} />
+      </fieldset>
     </form>
   </Modal>;
 }
-
 export function GoalModal({ goal, onClose }) {
   const { saveGoal, addGoalContribution, currency, notify } = useApp();
+  const [busy, setBusy] = useState(false);
+  const savedGoalId = useRef(null);
   const [statusId, setStatusId] = useState(goal?.statusId || null);
   const [error, setError] = useState("");
   useEffect(() => {
@@ -178,14 +172,17 @@ export function GoalModal({ goal, onClose }) {
     const form = new FormData(event.currentTarget);
     const name = form.get("name").trim();
     const target = Number(form.get("target"));
-    const contribution = Number(form.get("contribution"));
+    const contribution = goal ? 0 : Number(form.get("contribution"));
     if (!name || !Number.isFinite(target) || target <= 0 ||
         !Number.isFinite(contribution) || contribution < 0 || !statusId) {
       return setError("Enter a name, positive target, and nonnegative contribution.");
     }
+    setBusy(true);
+    setError("");
     try {
       const saved = await saveGoal({ goal_name: name, target_amount: target,
-        target_date: form.get("date"), status_id: statusId }, goal?.id);
+        target_date: form.get("date"), status_id: statusId }, goal?.id || savedGoalId.current);
+      savedGoalId.current = saved.id;
       // "Saved" is now a contribution, not a local number that overwrites
       // the balance. The backend sums persisted contributions for each goal.
       if (contribution > 0) await addGoalContribution({ goal_id: saved.id,
@@ -193,18 +190,52 @@ export function GoalModal({ goal, onClose }) {
       notify(goal ? "Goal updated" : "Goal added");
       onClose();
     } catch (failure) { setError(failure.message); }
+    finally { setBusy(false); }
   }
 
-  return <Modal title={goal ? "Edit Goal" : "Add Goal"} onClose={onClose}>
+  return <Modal title={goal ? "Edit Goal" : "Add Goal"} onClose={() => { if (!busy) onClose(); }}>
     <form onSubmit={submit}>
+      <fieldset disabled={busy} className="admin-fieldset">
       <Field label="Goal name" name="name" defaultValue={goal?.name || ""} required maxLength={100} />
       <Field label={`Target amount (${currency})`} name="target" type="number" min="0.01"
         step="0.01" defaultValue={goal?.target || ""} required />
-      <Field label={`${goal ? "Add contribution" : "Initial saved amount"} (${currency})`}
-        name="contribution" type="number" min="0" step="0.01" defaultValue={0} required />
+      {!goal && <Field label={`Initial saved amount (${currency})`}
+        name="contribution" type="number" min="0" step="0.01" defaultValue={0} required />}
       <Field label="Target date" name="date" type="date" defaultValue={goal?.date || localDate()} required />
       {error && <p role="alert" className="form-error">{error}</p>}
-      <FormActions onClose={onClose} label={goal ? "Save Changes" : "Add Goal"} />
+      <FormActions onClose={onClose} label={busy ? "Saving…" : goal ? "Save Changes" : "Add Goal"} />
+      </fieldset>
+    </form>
+  </Modal>;
+}
+
+export function GoalContributionModal({ goal, onClose }) {
+  const { addGoalContribution, currency, money, notify } = useApp();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  return <Modal title={`Add money to ${goal.name}`} onClose={() => { if (!busy) onClose(); }}>
+    <p className="report-caption">{money(goal.saved)} saved of {money(goal.target)}. Adding money increases your saved progress.</p>
+    <form onSubmit={async (event) => {
+      event.preventDefault();
+      const form = new FormData(event.currentTarget);
+      const amount = Number(form.get("amount"));
+      if (!Number.isFinite(amount) || amount <= 0) return setError("Enter an amount greater than zero.");
+      setBusy(true);
+      setError("");
+      try {
+        await addGoalContribution({ goal_id: goal.id, amount, contribution_date: form.get("date"), description: form.get("description").trim() });
+        notify("Money added to goal");
+        onClose();
+      } catch (failure) { setError(failure.message); }
+      finally { setBusy(false); }
+    }}>
+      <fieldset disabled={busy} className="admin-fieldset">
+        <Field label={`Amount (${currency})`} name="amount" type="number" min="0.01" step="0.01" required />
+        <Field label="Contribution date" name="date" type="date" defaultValue={localDate()} required />
+        <Field label="Note (optional)" name="description" maxLength={200} />
+        {error && <p role="alert" className="form-error">{error}</p>}
+        <FormActions onClose={onClose} label={busy ? "Saving…" : "Add Money"} />
+      </fieldset>
     </form>
   </Modal>;
 }

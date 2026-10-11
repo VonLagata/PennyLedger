@@ -24,12 +24,12 @@ it("starts with no category suggestions and saves a typed category with the chos
   await waitFor(() => expect(createTransaction).toHaveBeenCalledWith(expect.objectContaining({ category_name: "Freelance", transaction_type_id: 1, amount: 500 })));
 });
 
-it("creates a budget from a typed category", async () => {
+it("creates an overall budget for the selected month", async () => {
   render(<BudgetModal onClose={vi.fn()} />);
-  fireEvent.change(screen.getByLabelText("Category"), { target: { value: " Pet care " } });
+  fireEvent.change(screen.getByLabelText("Month"), { target: { value: "2028-02" } });
   fireEvent.change(screen.getByLabelText("Monthly limit (PHP)"), { target: { value: "750" } });
-  fireEvent.click(screen.getByRole("button", { name: "Add Budget" }));
-  await waitFor(() => expect(createBudget).toHaveBeenCalledWith(expect.objectContaining({ category_name: "Pet care", budget_amount: 750 })));
+  fireEvent.click(screen.getByRole("button", { name: "Add Budget Process" }));
+  await waitFor(() => expect(createBudget).toHaveBeenCalledWith(expect.objectContaining({ category_name: "Monthly budget", budget_amount: 750, start_date: "2028-02-01", end_date: "2028-02-29" })));
 });
 
 it("fills the transaction category from the saved-category dropdown", async () => {

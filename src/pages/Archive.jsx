@@ -3,6 +3,7 @@ import { useApp } from "../state/AppContext";
 import { PageTitle } from "../components/UI";
 import { TransactionTable } from "./Transactions";
 import { ReportTable } from "./Reports";
+import { isArchived } from "../lib/report-archive";
 
 export default function Archive() {
   const { transactions, reports } = useApp();
@@ -10,7 +11,7 @@ export default function Archive() {
     .filter((tx) => tx.archived)
     .sort((a, b) => a.description.localeCompare(b.description));
   const archivedReports = reports
-    .filter((report) => report.archived)
+    .filter((report) => isArchived(report.archived))
     .sort((a, b) => a.name.localeCompare(b.name));
   return (
     <>

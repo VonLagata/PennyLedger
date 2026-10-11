@@ -28,7 +28,7 @@ account states and place previously deleted users in the admin archive.
 Put this folder under XAMPP's `htdocs` and start Apache and MySQL. The API
 entry point for this ZIP's folder name is:
 
-`http://localhost/PennyLedger-React-PHP-full-review/IM_SYSTEM_MT/public/index.php`
+`http://localhost/PennyLedger/public/index.php`
 
 `config/db.php` reads `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, and
 `DB_PASSWORD` from Apache/PHP environment variables. Its defaults are
@@ -79,6 +79,43 @@ React origin (normally `http://127.0.0.1:5173`).
 a PHP-capable server; static hosting such as GitHub Pages only hosts React.
 
 ## What is connected
+
+### Frontend budget controls and recent activity
+
+Frontend spending analytics appear on Dashboard, Budget, and Reports. Estimates
+use average expenses from up to three completed months with recorded transactions,
+plus a 10% buffer rounded up to the display currency's whole unit. Incomplete
+months and future-dated transactions are excluded from this estimate; archived
+records remain part of financial totals. Spending pace assumes the current daily
+average continues until month end. Suggestions never save a budget automatically.
+The previous month's review can be downloaded in Reports; it is calculated on
+page load and is not a scheduled email or a persisted report snapshot.
+
+After a successful transaction response, React updates the matching wallet using
+`paymentMethodId` and the signed saved transaction amount, then refreshes wallet
+balances from the API. Durable wallet updates and automatic report delivery remain
+backend responsibilities. The API must include numeric `paymentMethodId` and a
+signed `amount` on transactions, and `paymentMethodId` on wallets.
+
+The Budget page can edit and delete existing budgets using `PUT /budgets/:id`
+and `DELETE /budgets/:id`. The budget form now takes a month and one overall
+spending limit. For compatibility with the current category-based API it sends
+`category_name: "Monthly budget"`, `budget_amount`, `budget_period: "monthly"`,
+and the selected month's start/end dates. The frontend calculates progress from
+all expense transactions in that month, including archived transactions. When
+an overall plan exists, dashboard/report totals exclude legacy category limits
+for that month to avoid double counting. The backend team should support overall
+monthly plans explicitly and calculate the same totals server-side. The UI
+updates only after a successful API response.
+
+Dashboard Recent Activity currently stores up to 100 successful actions per
+account in this browser's local storage and displays the latest eight. It
+records wallet balances, budget limits, goal targets, and contribution amounts.
+It cannot show earlier actions or actions from another browser. Backend work
+should replace this storage with authenticated, user-specific activity records
+and generate logs on the server. The frontend entry shape is
+`{ id, description, amount?, date }`, where `date` is an ISO timestamp.
+Recent Transactions and the transaction filters remain separate from activity.
 
 - Registration, verification, resend, login/logout, and role checks
 - User transactions, budgets, goals, contributions, and report logs

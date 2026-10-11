@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "../state/AuthContext";
 import { Field, Logo, PasswordField, ThemeSwitch } from "../components/UI";
@@ -14,15 +14,15 @@ export default function Auth({ signup = false, admin = false }) {
   const [otp, setOtp] = useState("");
 
   const [isDarkMode, setIsDarkMode] = useState(
-    typeof document !== "undefined" && document.documentElement.classList.contains("dark")
+    typeof document !== "undefined" && document.documentElement.dataset.theme === "dark"
   );
 
   useEffect(() => {
     const observer = new MutationObserver(() => {
-      setIsDarkMode(document.documentElement.classList.contains("dark"));
+      setIsDarkMode(document.documentElement.dataset.theme === "dark");
     });
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
-    return () => observer.disconnected?.() || observer.disconnect();
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+    return () => observer.disconnect();
   }, []);
 
   if (account)
@@ -79,14 +79,22 @@ export default function Auth({ signup = false, admin = false }) {
             {admin
               ? "Administration"
               : signup
-                ? "Manage your Money Securely with trust."
-                : "Welcome Back!"}
+                ? "Build a money plan that fits your life."
+                : "Your next money milestone starts here."}
           </h1>
           <p>
             {admin
               ? "Manage user accounts, review account activity, and control registration from your admin workspace."
-              : "Track your transactions, budgets, and savings goals in your own account."}
+              : "See your wallet balances together, track everyday spending, and make steady progress toward your savings goals."}
           </p>
+          {!admin && <p className="auth-copy-note">Record your own balances and transactions. Review your plan whenever you need a clearer picture.</p>}
+          <section className="auth-dummy-box" aria-label="Dummy Accounts">
+            <h2>Dummy Accounts</h2>
+            <p>Credentials for your project demonstration.</p>
+            <article className="dummy-account"><h3>Administrator</h3><dl><dt>Email</dt><dd><code>admin@example.com</code></dd><dt>Password</dt><dd><code>admin123</code></dd></dl><p>Created earlier in this local project database.</p><Link className="btn btn-outline btn-sm" to="/admin/login">Admin sign in</Link></article>
+            <article className="dummy-account"><h3>User · Sample</h3><dl><dt>Email</dt><dd><code>demo.user@example.com</code></dd><dt>Password</dt><dd><code>DemoUser123!</code></dd></dl><p>Sample credentials only. Your backend team must create and verify this account before it can sign in.</p></article>
+          </section>
+
         </div>
         <div 
           className="auth-card"
@@ -96,6 +104,7 @@ export default function Auth({ signup = false, admin = false }) {
             border: "1px solid rgba(255, 255, 255, 0.1)"
           } : {}}
         >
+          <div className="auth-form-content">
           <h2>
             {admin ? "Admin Sign In" : signup ? "Create Account" : showResend ? "Resend Code" : "Login"}
           </h2>
@@ -129,8 +138,8 @@ export default function Auth({ signup = false, admin = false }) {
                   {error}
                 </p>
               )}
-              <button type="submit" className={isDarkMode ? "btn btn-outline-light" : "btn btn-dark"} disabled={busy}>Verify email</button>
-              <button type="button" className="btn btn-outline" disabled={busy}
+              <button type="submit" className="btn auth-submit auth-verify" disabled={busy}>Verify email</button>
+              <button type="button" className="btn btn-outline auth-resend" disabled={busy}
                 onClick={async () => {
                   setBusy(true);
                   setError("");
@@ -169,8 +178,8 @@ export default function Auth({ signup = false, admin = false }) {
                   {error}
                 </p>
               )}
-              <button type="submit" className={isDarkMode ? "btn btn-outline-light" : "btn btn-dark"} disabled={busy} style={{ marginBottom: "10px" }}>Send new code</button>
-              <button type="button" className="btn btn-outline" onClick={() => {
+              <button type="submit" className="btn auth-submit" disabled={busy} style={{ marginBottom: "10px" }}>Send new code</button>
+              <button type="button" className="btn btn-outline auth-resend" onClick={() => {
                 setShowResend(false);
                 setError("");
               }}>Back</button>
@@ -217,7 +226,7 @@ export default function Auth({ signup = false, admin = false }) {
                   {error}
                 </p>
               )}
-              <button type="submit" className={isDarkMode ? "btn btn-outline-light" : "btn btn-dark"} disabled={busy}>
+              <button type="submit" className="btn auth-submit" disabled={busy}>
                 {busy ? "Please wait…" : signup ? "Sign Up" : "Login"}
               </button>
             </form>
@@ -236,13 +245,14 @@ export default function Auth({ signup = false, admin = false }) {
           </p>
           {!admin && !verificationEmail && !showResend && (
             <p className="auth-foot">
-              <button type="button" className="btn btn-outline btn-sm" onClick={() => {
+              <button type="button" className="btn btn-outline btn-sm auth-resend" onClick={() => {
                 setShowResend(true);
                 setError("");
               }}>Resend verification code</button>
             </p>
           )}
           <p className="demo-note">Accounts are stored on the PennyLedger server.</p>
+          </div>
         </div>
       </main>
     </>

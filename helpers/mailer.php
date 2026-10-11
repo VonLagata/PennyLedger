@@ -34,6 +34,12 @@ function send_email(string $to, string $subject, string $body, ?string $plainTex
         $mail->CharSet = 'UTF-8';
         $mail->Subject = $subject;
         $mail->Body = $body;
+        // Embed artwork locally; email recipients cannot access localhost URLs.
+        foreach (['penny-logo' => 'logo.png', 'penny-peso' => 'peso.png'] as $cid => $filename) {
+            if (str_contains($body, "cid:{$cid}")) {
+                $mail->addEmbeddedImage(__DIR__ . '/../public/email-assets/' . $filename, $cid, $filename, 'base64', 'image/png');
+            }
+        }
         // OTP emails supply a readable plain-text version; older callers keep
         // the previous fallback without needing to change their call sites.
         $mail->AltBody = $plain;
